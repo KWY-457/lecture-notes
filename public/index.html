@@ -372,7 +372,27 @@
       </section>
 
       <section class="sect">
-        <h4>④ 关于与协议</h4>
+        <h4>④ 手机访问</h4>
+        <p class="hint">
+          开启后，同一个 Wi-Fi 下的手机、平板、别的电脑能打开下面这个地址，把录音传进来。
+          <b>默认是关的</b> —— 关着的时候，就算别人拿到地址也只会看到 403，一个字节都读不到。
+          录完传完记得关掉。
+        </p>
+        <label class="check"><input type="checkbox" id="s-lan-enabled"> 允许同一 Wi-Fi 的设备访问</label>
+        <div class="field wide">
+          <label>手机该访问的地址</label>
+          <div class="path-row">
+            <input id="lan-url" type="text" class="path-input" readonly spellcheck="false"
+                   placeholder="打开开关后显示">
+            <button type="button" class="icon-btn" id="btn-lan-copy" title="复制这个地址">⧉</button>
+          </div>
+          <span class="hint" id="lan-status"></span>
+        </div>
+        <p class="hint" id="lan-warn" hidden></p>
+      </section>
+
+      <section class="sect">
+        <h4>⑤ 关于与协议</h4>
         <div class="about-row">
           <span class="hint" id="about-version">版本 —</span>
           <button type="button" class="linklike" id="btn-show-license">用户协议</button>
@@ -382,7 +402,7 @@
       </section>
 
       <section class="sect" id="diag-sect">
-        <h4>⑤ 环境自检</h4>
+        <h4>⑥ 环境自检</h4>
         <div class="diag" id="diag"></div>
       </section>
 
@@ -479,10 +499,10 @@
       <h4>最快的用法</h4>
       <ol>
         <li>使用手机自带的「录音机」录制整节课（保持连续录制，中途无需暂停）。</li>
-        <li>课后让手机连接 Wi-Fi，用手机浏览器打开下方局域网地址：
-          <div class="code-line" id="help-lan">（启动时加了 --host 0.0.0.0 才会显示）</div>
+        <li>课后让手机连接 Wi-Fi。先在电脑上打开 <b>设置 → ④ 手机访问</b> 把开关打开，下方就会显示该访问的地址：
+          <div class="code-line" id="help-lan">（开关打开后会显示）</div>
         </li>
-        <li>在手机页面点「导入录音」，选中刚才录的文件，等进度条走完。</li>
+        <li>在手机页面点「导入录音」，选中刚才录的文件，等进度条走完。<b>传完记得回电脑把开关关掉。</b></li>
         <li>回到电脑浏览器，打开同一条录音，点「① 开始转写」，转写完笔记会自动出现。</li>
         <li>点「导出 Word」，用 Word / WPS 打开就是一份复习笔记，也可以在里面另存为 PDF。</li>
       </ol>

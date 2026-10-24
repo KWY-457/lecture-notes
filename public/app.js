@@ -1780,7 +1780,7 @@ function applyProvider(id, { force = false } = {}) {
   if (llmHint) {
     if (isLocal) {
       llmHint.textContent =
-        '笔记用本机大模型 qwen2.5-7b：不联网、不花钱，但常驻要 6GB 左右显存。需要先在 ⑤ 环境自检里部署本地模型（共约 4.4GB）；没部署时「AI 润色」会自动退回离线引擎挑重点。';
+        '笔记用本机大模型 qwen2.5-7b：不联网、不花钱，但常驻要 6GB 左右显存。需要先在 ⑥ 环境自检里部署本地模型（共约 4.4GB）；没部署时「AI 润色」会自动退回离线引擎挑重点。';
     } else if (llmP) {
       const bits = [];
       if (llmP.free) bits.push('✅ 新用户通常有免费额度。');
@@ -2163,6 +2163,7 @@ async function openSettings() {
   refreshStorage();
   applyProvider($('s-provider').value);
   syncSettingsVisibility();
+  refreshLan();
   renderAbout();
   $('settings-modal').hidden = false;
   runDiagnostics();
@@ -2388,6 +2389,105 @@ function syncSettingsVisibility() {
  * 如果界面上不说，用户会以为录音存在 D 盘，其实在 C 盘 ——
  * 等到某天发现「录音不见了」才炸。所以这里用 err 样式顶出来。
  */
+/**
+ * 「④ 手机访问」那一节的渲染 + 开关。
+ *
+ * 设计上服务端 socket 一直绑 0.0.0.0（否则开关要重启进程才生效），
+ * 真正拦人的是 config.lan.enabled —— 关着时非本机请求全 403。
+ * 所以这里只要改配置，不用重启。
+ *
+ * 地址为什么从 /lan 拿而不是自己拼：那串密钥（8gvqzxe4nv 那种）只有服务端
+ * 知道，前端拼出来的地址是残缺的，手机打开只会 404。所以 urls 一律用
+ * 服务端返回的完整串。
+ */
+async function refreshLan() {
+  try {
+    state.lanInfo = await api('/lan');
+  } catch {
+    state.lanInfo = null;
+  }
+  renderLan();
+}
+
+function renderLan() {
+  const info = state.lanInfo;
+  const on = !!info?.enabled;
+  const hostOnLan = !!info?.hostOnLan;
+  const cb = $('s-lan-enabled');
+  const url = $('lan-url');
+  const status = $('lan-status');
+  const warn = $('lan-warn');
+  const copy = $('btn-lan-copy');
+  const remote = (state.lanInfo || state.sys)?.local === false;
+  // 还没拿到 /lan（网络慢）时不要拿默认值去吓人，先按住。
+  const unknown = !info;
+
+  if (cb) {
+    cb.checked = on;
+    // 服务根本没绑局域网时，开关是个空按钮 —— 禁掉并说明，别让人以为点了没反应。
+    cb.disabled = unknown || remote || !hostOnLan;
+  }
+
+  if (url) {
+    const first = on && info?.urls?.length ? info.urls[0] : '';
+    url.value = first;
+    url.placeholder = unknown
+      ? '读取中…'
+      : on && !info?.urls?.length
+        ? '这台电脑没有可用的局域网地址'
+        : '打开开关后显示';
+  }
+  if (copy) copy.disabled = unknown || remote || !on;
+
+  if (status) {
+    if (unknown) {
+      status.textContent = '';
+      status.className = 'hint';
+    } else if (!hostOnLan) {
+      status.textContent = '这个服务启动时只绑了本机，手机连不上。用启动器重新启动后再开这里。';
+      status.className = 'hint err';
+    } else if (remote) {
+      status.textContent = on ? '已开启（手机能连过来）。' : '现在是关着的。';
+      status.className = on ? 'hint ok' : 'hint';
+    } else if (on) {
+      status.textContent = '已开启 —— 手机连同一个 Wi-Fi，浏览器里打开上面这个地址（后面那串字母别漏）。';
+      status.className = 'hint ok';
+    } else {
+      status.textContent = '现在是关着的。手机连上来只会看到 403，不会读到任何东西。';
+      status.className = 'hint';
+    }
+  }
+
+  if (warn) {
+    if (hostOnLan && !on && !unknown) {
+      warn.textContent = '⚠️ 开着的时候，同一个 Wi-Fi 下的任何设备只要知道那串地址就能打开你的页面。传完录音记得回来关掉。';
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+    }
+  }
+}
+
+/** 开关的写入。成功之后不重拉整个 /system —— 那个接口要算目录大小，慢。 */
+async function toggleLan(on) {
+  const cb = $('s-lan-enabled');
+  if (cb) cb.disabled = true;
+  try {
+    const r = await api('/lan', { method: 'POST', body: { enabled: on } });
+    state.lanInfo = r;
+    toast(on ? '手机访问已开启' : '手机访问已关闭', 'ok', 2400);
+  } catch (e) {
+    if (cb) cb.checked = !on;
+    toast(`改不了：${e.message}`, 'err', 5000);
+  } finally {
+    renderLan();
+    // 开关一改，⑥ 环境自检里那行「局域网地址」就过期了 —— 那一行是打开设置
+    // 面板时算的。不重跑的话用户会看到「已开启」和「未开启 —— 在 ④ 手机访问
+    // 里打开」同时出现在同一屏上，非常容易被当成没生效。
+    runDiagnostics();
+  }
+}
+
 function renderStorage(sys) {
   const s = sys?.storage;
   if (!s) return;
@@ -2777,7 +2877,14 @@ async function runDiagnostics() {
   if (mem && mem < 8) add('提示', '内存偏小，长录音建议用云端转写', false);
   try {
     const sys = await api('/system');
-    add('局域网地址', sys.lan.length ? sys.lan.map((i) => `http://${i}:${location.port || 8788}`).join('  ') : '未开放（启动时加 --host 0.0.0.0）');
+    // 「手机访问」关着时地址虽然算得出来但连不上，别让用户照着抄。
+    if (!sys.lanOn) {
+      add('局域网地址', '未开启 —— 在 ④ 手机访问 里打开', false);
+    } else if (!sys.lan.length) {
+      add('局域网地址', '未开放（启动时加了 --host 127.0.0.1）', false);
+    } else {
+      add('局域网地址', sys.lan.map((i) => `http://${i}:${location.port || 8788}`).join('  '));
+    }
   } catch {}
   const c = state.config;
   if (c.asr.provider === 'local') {
@@ -2893,6 +3000,23 @@ function bind() {
   $('btn-models-dir-copy').onclick = () => copyStoragePath('models');
   $('btn-lect-dir-open').onclick = () => openStorageDir('lectures');
   $('btn-models-dir-open').onclick = () => openStorageDir('models');
+  // 「④ 手机访问」开关。onchange 而不是 onclick：checkbox 的 onclick 里读
+  // checked 在部分浏览器上还是旧值，onchange 一定已经翻过来了。
+  $('s-lan-enabled').onchange = (e) => toggleLan(e.target.checked);
+  $('btn-lan-copy').onclick = async () => {
+    const v = $('lan-url').value.trim();
+    if (!v) return;
+    try {
+      await navigator.clipboard.writeText(v);
+      toast('地址已复制', 'ok', 2000);
+    } catch {
+      // 浏览器不给复制权限时退回到「帮你选中」，别直接失败。
+      const n = $('lan-url');
+      n.focus();
+      n.select();
+      toast('浏览器不允许自动复制，已帮你选中，按 Ctrl+C', 'err', 4000);
+    }
+  };
   // 用户开始打字就标记 touched。renderStorage 靠它决定要不要把输入框
   // 覆盖成「当前实际位置」—— 不标记的话，设置面板重开或迁移后刷新时，
   // 用户打了一半的路径会被悄悄冲掉。
@@ -3307,11 +3431,25 @@ async function boot() {
     if (health) {
       state.appVersion = health.version || '';
       const lan = health.urls.filter((u) => !u.includes('127.0.0.1'));
-      const text = lan.length
-        ? `手机上传地址（连同一个 Wi-Fi）：${lan.join('  ')}`
-        : '想用手机直接上传录音？重启服务时加参数 --host 0.0.0.0，然后手机浏览器打开局域网地址。';
-      $('lan-hint').textContent = text;
-      $('help-lan').textContent = lan.length ? lan.join('   ') : '（启动时加 --host 0.0.0.0 后这里会显示局域网地址）';
+      // 列表头那条提示和帮助页里的地址，都要跟着「手机访问」开关走。
+      // 开关关着时地址是算得出来的，但手机连上去只有 403 —— 照抄过去只会
+      // 白折腾一趟，所以这里只说「去 ④ 打开」，不给地址。
+      let lanOn = false;
+      try {
+        lanOn = (await api('/lan')).enabled === true;
+      } catch {}
+      if (!lan.length) {
+        $('lan-hint').textContent =
+          '想用手机直接上传录音？这个服务启动时只绑了本机，用启动器重新启动后才能开「手机访问」。';
+        $('help-lan').textContent = '（这个服务只绑了本机，手机连不上）';
+      } else if (!lanOn) {
+        $('lan-hint').textContent =
+          '想用手机上传录音？先到 设置 → ④ 手机访问 把开关打开，地址就会出现在这里。';
+        $('help-lan').textContent = '（先到 设置 → ④ 手机访问 打开开关，地址会显示在这里）';
+      } else {
+        $('lan-hint').textContent = `手机上传地址（连同一个 Wi-Fi）：${lan.join('  ')}`;
+        $('help-lan').textContent = lan.join('   ');
+      }
     }
   } catch (e) {
     toast('无法连接本地服务：' + e.message, 'err', 8000);

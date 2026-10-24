@@ -386,7 +386,7 @@ nvidia-smi --query-gpu=memory.used,memory.free,utilization.gpu --format=csv,nohe
 
 「显卡自检」原来只查 `'gpu' in navigator` —— **`navigator.gpu` 存在 ≠ 能用**（拿不到适配器时旧逻辑会报成「支持」）。现在真去 `requestAdapter({ powerPreference: 'high-performance' })` → 读 `adapter.info`（vendor/architecture）→ `requestDevice()`，失败时把原因原样带出来。
 
-这个能力现在放在**设置 → ⑤ 环境自检**里（`checkGpu()` / `runDiagnostics()`），和 Node 版本、模型缓存等诊断项目一起跑，不再占用主界面。
+这个能力现在放在**设置 → ⑥ 环境自检**里（`checkGpu()` / `runDiagnostics()`），和 Node 版本、模型缓存等诊断项目一起跑，不再占用主界面。
 
 ### 7.9 三种跑法实测对比（同一台机器、同一条录音、同一份代码）
 

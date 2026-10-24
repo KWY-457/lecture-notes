@@ -313,6 +313,22 @@ const DEFAULT_CONFIG = {
     modelsDir: '',
   },
   /**
+   * 手机访问（局域网）。
+   *
+   * 2026-10-24 加：以前启动器无条件 `--host 0.0.0.0`，用户双击一下就在
+   * 校园网 / 咖啡厅 Wi-Fi 上把服务和全部课堂录音敞开了，自己毫不知情，
+   * 唯一屏障是 URL 里那串密钥 —— 而 URL 会进浏览器历史、截图、聊天记录。
+   *
+   * 现在改成显式开关：默认 false，非本机请求一律 403（连 404 都不给，
+   * 不告诉外人这里有个服务）。要传手机录音时在界面上点一下开，
+   * 关掉就立刻收紧。socket 仍然绑 0.0.0.0（不然开关要重启进程才生效，
+   * 体验太差），但没开开关时数据一个字节都出不去。
+   */
+  lan: {
+    /** 是否允许局域网（手机、平板、另一台电脑）访问 */
+    enabled: false,
+  },
+  /**
    * 保存过的 API Key 清单。
    *
    * 为什么不直接读 asr.apiKey / llm.apiKey：
@@ -538,16 +554,29 @@ function isLoopback(req) {
  */
 function stripEntry(pathname, req) {
   const secret = instance?.secret || '';
+  const loopback = isLoopback(req);
+  // 局域网开关关着时，非本机请求一律拒。放在最前面：连密钥都不验了，
+  // 因为「关着」的语义是「这台机器不对外提供服务」，不是「密钥错了」。
+  if (!loopback && !lanAllowed()) return { path: pathname, granted: false, lanOff: true };
   if (!secret) return { path: pathname, granted: true };
   // 带密钥的路径：/<secret>/... 或 /<secret>
   if (pathname === '/' + secret || pathname.startsWith('/' + secret + '/')) {
     const rest = pathname.slice(secret.length + 1);
     return { path: rest || '/', granted: true, bare: true };
   }
-  if (isLoopback(req)) return { path: pathname, granted: true };
+  if (loopback) return { path: pathname, granted: true };
   if (cookieHasEntry(req)) return { path: pathname, granted: true };
   if (pathname === '/api/health' || pathname === '/health') return { path: pathname, granted: true };
   return { path: pathname, granted: false };
+}
+
+/** 局域网开关（config.lan.enabled）。读不到配置就当关着 —— 失败要往安全那边倒。 */
+function lanAllowed() {
+  try {
+    return config?.lan?.enabled === true;
+  } catch {
+    return false;
+  }
 }
 
 /** 请求带的 cookie 里有没有本机密钥（局域网首次用带密钥的地址打开后就会种上） */
@@ -1542,6 +1571,36 @@ async function handleApi(req, res, u) {
     return fail(res, 405, '方法不支持');
   }
 
+  // 「手机访问」开关。只给本机开 —— 手机自己被关在外面的时候当然不能
+  // 反过来给自己开门，那开关就没意义了。
+  if (p === '/lan') {
+    // GET 和 POST 回同一份结构 —— 前端拿到 POST 的返回会直接当成最新的
+    // lanInfo 用。少一个字段，界面上就会莫名其妙退回「只绑了本机」那句话。
+    const lanState = (req) => ({
+      ok: true,
+      enabled: lanAllowed(),
+      hostOnLan: HOST === '0.0.0.0' || HOST === '::',
+      // 界面用这个判断「是不是在这台电脑上」，跟 /system 的 local 同一个含义。
+      // 单独给一份是因为设置面板打开时只拉 /lan（/system 要算目录大小，慢）。
+      local: isLoopback(req),
+      urls: HOST === '0.0.0.0' || HOST === '::'
+        ? lanAddresses().map((ip) => 'http://' + ip + ':' + PORT + entryPrefix())
+        : [],
+    });
+    if (req.method === 'GET') return json(res, 200, lanState(req));
+    if (req.method !== 'POST') return fail(res, 405, '方法不支持');
+    if (!isLoopback(req)) return fail(res, 403, '只允许在本机开关手机访问');
+    const body = await readJsonBody(req).catch(() => ({}));
+    const on = body?.enabled === true;
+    if (on && !(HOST === '0.0.0.0' || HOST === '::')) {
+      // 服务只绑了 127.0.0.1，开开关也没用。如实说，别让用户以为坏了。
+      return fail(res, 409, '这个服务启动时只绑了本机（--host 127.0.0.1），手机连不上。请用启动器重新启动。');
+    }
+    await saveConfig({ lan: { enabled: on } });
+    console.log('  [手机访问] ' + (on ? '已开启' : '已关闭'));
+    return json(res, 200, lanState(req));
+  }
+
   // 把内存里的配置丢掉、重新从磁盘读。
   // 只有本机能调 —— 这是「测试脚本改了配置、跑完把文件还原了，但服务内存里还是脏的」
   // 那个坑的补丁：文件还原之后必须让服务也忘记旧值，否则下一次 saveConfig
@@ -1998,6 +2057,11 @@ async function handleApi(req, res, u) {
       // 不如一开始就把按钮禁掉、说清楚为什么 —— 手机会看到一段只读的说明。
       local: isLoopback(req),
       lan: lanAddresses(),
+      // 「手机访问」开关状态。lanOn 是配置里的开关，hostOnLan 是 socket 有没有
+      // 真的绑在 0.0.0.0 上 —— 两者都为 true 手机才连得上，界面要分开显示，
+      // 否则用户开了开关却发现没反应，不知道该怪谁。
+      lanOn: lanAllowed(),
+      hostOnLan: HOST === '0.0.0.0' || HOST === '::',
       modelCache: {
         dir: HF_CACHE,
         sizeGB: +((await dirSize(HF_CACHE)) / 1024 ** 3).toFixed(2),
@@ -2421,6 +2485,12 @@ const server = http.createServer(async (req, res) => {
   // 回 404 而不是 403：连「这里有个服务」都不告诉外人。
   const grant = stripEntry(u.pathname, req);
   if (!grant.granted) {
+    // 局域网开关关着时给一句人话：端口本来就绑在 0.0.0.0 上，扫描器看得见
+    // 端口开着，藏也藏不住；而「手机打开说页面不存在」是最容易让人以为程序坏了
+    // 的坑。数据仍然一个字节都出不去，这里只透露「有这么个软件」。
+    if (grant.lanOff) {
+      return fail(res, 403, '这台电脑关着「手机访问」。请在电脑上打开 设置 → 手机访问 再试。');
+    }
     return fail(res, 404, '页面不存在');
   }
   // 第一次用带密钥的地址打开（手机）：种 cookie 并跳转到干净根路径，

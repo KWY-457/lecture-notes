@@ -228,6 +228,10 @@ try {
       secret = (h.urls || []).map((u) => u.match(/\/([a-z0-9]{8,})\/?$/)).find(Boolean)?.[1] || '';
     } catch {}
     const cookie = secret ? { cookie: `ln_entry=${secret}` } : {};
+    // 2026-10-24：「手机访问」默认关着，关着时局域网连探针都过不去，后面
+    // 那一串「局域网拿不到明文」的断言就全成了假红。先明确打开。
+    // 这是这轮测试自己的服务（新数据目录），跑完进程就没了，不用还原。
+    await j('/api/lan', { method: 'POST', body: { enabled: true } });
     try {
       const lanH = await fetchLan(lan, '/api/health');
       check('局域网能连上（探针）', lanH.status === 200 && lanH.body.ok === true, `status=${lanH.status}`);

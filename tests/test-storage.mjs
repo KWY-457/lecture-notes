@@ -254,19 +254,28 @@ console.log('\n=== 5. 局域网 / 手机不能改（403） ===');
     const lanApi = (p, body) =>
       api(`${p}`, body, secret ? `${lanBase}/${secret}` : lanBase).catch((e) => ({ status: 0, data: { error: String(e) } }));
 
-    const r1 = await lanApi('/storage/check', { which: 'lectures', dir: TMP });
-    check('局域网调 /storage/check 被拒（403）', r1.status === 403, `HTTP ${r1.status} ${JSON.stringify(r1.data)}`);
+    // 2026-10-24：「手机访问」默认关着，关着时非本机连页面都打不开，
+    // 下面的 403 就分不清是「档位对了」还是「开关没开」。所以先明确打开，
+    // 测完在 finally 里还原 —— 不还原会把用户配置留在「开着」。
+    const wasOn = (await api('/lan')).data?.enabled === true;
+    if (!wasOn) await api('/lan', { enabled: true });
+    try {
+      const r1 = await lanApi('/storage/check', { which: 'lectures', dir: TMP });
+      check('局域网调 /storage/check 被拒（403）', r1.status === 403, `HTTP ${r1.status} ${JSON.stringify(r1.data)}`);
 
-    const r2 = await lanApi('/storage/move', { which: 'lectures', dir: TMP });
-    check('局域网调 /storage/move 被拒（403）', r2.status === 403, `HTTP ${r2.status} ${JSON.stringify(r2.data)}`);
+      const r2 = await lanApi('/storage/move', { which: 'lectures', dir: TMP });
+      check('局域网调 /storage/move 被拒（403）', r2.status === 403, `HTTP ${r2.status} ${JSON.stringify(r2.data)}`);
 
-    const r3 = await lanApi('/system');
-    check('局域网能看 /system，且 local 为 false', r3.status === 200 && r3.data?.local === false, `local=${r3.data?.local}`);
+      const r3 = await lanApi('/system');
+      check('局域网能看 /system，且 local 为 false', r3.status === 200 && r3.data?.local === false, `local=${r3.data?.local}`);
 
-    // /storage/open 会让**服务所在的那台机器**弹一个资源管理器窗口。
-    // 手机上点一下就在别人电脑上弹窗，是最不能接受的行为，必须 403。
-    const r4 = await lanApi('/storage/open', { which: 'lectures' });
-    check('局域网调 /storage/open 被拒（403）', r4.status === 403, `HTTP ${r4.status} ${JSON.stringify(r4.data)}`);
+      // /storage/open 会让**服务所在的那台机器**弹一个资源管理器窗口。
+      // 手机上点一下就在别人电脑上弹窗，是最不能接受的行为，必须 403。
+      const r4 = await lanApi('/storage/open', { which: 'lectures' });
+      check('局域网调 /storage/open 被拒（403）', r4.status === 403, `HTTP ${r4.status} ${JSON.stringify(r4.data)}`);
+    } finally {
+      if (!wasOn) await api('/lan', { enabled: false }).catch(() => {});
+    }
   }
 }
 

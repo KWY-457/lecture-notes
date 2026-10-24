@@ -77,6 +77,7 @@ const SERVER = [
   ['test-donate.mjs', '打赏弹窗（自起临时服务，不碰正式数据）'],
   ['test-keyvault.mjs', 'API Key 清单：落盘、重启、本机明文 / 局域网掩码、删除'],
   ['test-storage.mjs', '存储位置：拒绝坏路径、迁移只复制不删源、改回默认、局域网 403'],
+  ['test-lan.mjs', '手机访问开关：默认关、关着时局域网 403、开了放行、外机关不了'],
   ['test-provider-migration.mjs', '老配置迁移：收掉的服务商并进 custom / local，Key 和自填项不动'],
   ['test-integrations.mjs', '对外集成'],
 ];
