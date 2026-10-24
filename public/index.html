@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>讲义笔记 · LectureNotes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="icon-btn only-mobile" id="btn-menu" title="课程列表" aria-label="课程列表">☰</button>
+  <button class="icon-btn" id="btn-sidebar" title="收起录音列表" aria-label="收起或展开录音列表">⟨</button>
+  <div class="brand"><span class="logo">📚</span><b>讲义笔记</b><span class="sub">LectureNotes</span></div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btn-record" title="用电脑麦克风直接录音">⏺ 录音</button>
+    <button class="btn primary" id="btn-import">⬆ 导入录音</button>
+    <button class="icon-btn" id="btn-settings" title="设置">⚙</button>
+  </div>
+</header>
+
+<main class="layout" id="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <span>我的课堂录音</span>
+      <div class="side-head-actions">
+        <button class="btn ghost tiny" id="btn-batch">多选</button>
+        <button class="icon-btn tiny only-mobile" id="btn-close-menu">✕</button>
+      </div>
+    </div>
+    <div class="side-search"><input id="search" type="search" placeholder="搜索标题 / 课程…"></div>
+    <div class="batch-bar" id="batch-bar" hidden>
+      <span class="batch-count" id="batch-count"></span>
+      <button class="btn tiny" id="btn-batch-all">全选</button>
+      <button class="btn tiny ghost" id="btn-batch-none">取消选择</button>
+      <button class="btn tiny danger" id="btn-batch-delete">删除所选</button>
+      <button class="btn tiny ghost" id="btn-batch-exit">退出多选</button>
+    </div>
+    <ul id="lecture-list" class="lecture-list"></ul>
+    <div class="side-foot">
+      <button class="btn ghost tiny" id="btn-health">环境自检</button>
+      <button class="btn ghost tiny" id="btn-help">使用说明</button>
+    </div>
+  </aside>
+
+  <section class="content" id="content">
+    <!-- 空状态 -->
+    <div id="empty-state" class="empty">
+      <div class="empty-card">
+        <div class="empty-emoji">🎧</div>
+        <h2>把课堂录音，变成能直接复习的笔记</h2>
+        <p>把手机里录的课导进来，自动转成文字、自动挑出重点，生成能直接复习的课堂笔记。</p>
+        <div class="empty-actions">
+          <button class="btn primary big" id="btn-import-2">选择音频文件</button>
+          <button class="btn big" id="btn-demo">先用示例体验</button>
+        </div>
+        <ol class="steps">
+          <li><b>手机录音</b>：用手机自带的录音机上课录音（不用装 App）。</li>
+          <li><b>传到电脑</b>：手机和电脑连同一个 Wi-Fi，用手机浏览器打开本页的局域网地址上传；或者直接微信/数据线拷到电脑。</li>
+          <li><b>自动整理</b>：在本页点「开始转写」，转写完笔记会自动生成（重点 + 逐字稿 + 自测题），不用再点。</li>
+          <li><b>导出</b>：点「导出 Word」，用 Word 或 WPS 打开就是一份排版好的复习笔记。</li>
+        </ol>
+        <p class="hint" id="lan-hint"></p>
+      </div>
+    </div>
+
+    <!-- 详情 -->
+    <div id="detail" hidden>
+      <div class="detail-head">
+        <div class="detail-nav">
+          <button class="btn ghost tiny" id="btn-back">← 返回列表</button>
+        </div>
+        <div class="title-row">
+          <h1 id="d-title" contenteditable="true" spellcheck="false">未命名</h1>
+          <span class="badge" id="d-status">已导入</span>
+        </div>
+        <div class="meta-row">
+          <label class="meta-item">课程 <input id="d-course" placeholder="如：数据结构" size="10"></label>
+          <span class="meta-item" id="d-info"></span>
+          <button class="icon-btn tiny" id="btn-delete" title="删除这条录音">🗑</button>
+        </div>
+      </div>
+
+      <div class="player-bar">
+        <audio id="audio" controls preload="metadata"></audio>
+        <div class="quick-jumps">
+          <span class="hint">跳到：</span>
+          <button class="btn tiny ghost" data-jump="-30">« 30s</button>
+          <button class="btn tiny ghost" data-jump="30">30s »</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="tb-group">
+          <button class="btn primary" id="btn-transcribe">① 开始转写</button>
+          <span class="tb-hint" id="transcribe-hint"></span>
+          <span class="engine-tag" id="engine-tag"></span>
+        </div>
+        <div class="tb-group">
+          <button class="btn ghost" id="btn-notes" title="转写完成后笔记会自动生成；想按新设置重做时点这里">重新生成笔记</button>
+          <button class="btn ghost" id="btn-notes-ai" title="用大模型把口语润色成书面笔记">AI 润色</button>
+        </div>
+        <div class="tb-group">
+          <button class="btn ghost" id="btn-export-docx">导出 Word</button>
+          <button class="btn ghost" id="btn-copy">复制笔记</button>
+        </div>
+      </div>
+
+      <div class="progress-wrap" id="progress-wrap" hidden>
+        <div class="progress-main">
+          <div class="progress-head">
+            <span class="progress-stage" id="progress-stage">准备中</span>
+            <span class="progress-label" id="progress-label">处理中…</span>
+            <span class="progress-pct" id="progress-pct">—</span>
+          </div>
+          <div class="progress"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-detail" id="progress-detail" hidden></div>
+        </div>
+        <button class="btn tiny ghost" id="btn-cancel-job">取消</button>
+      </div>
+
+      <div class="panes">
+        <div class="pane">
+          <div class="pane-head">
+            <span class="tabs">
+              <button class="tab active" id="tab-note">📝 笔记</button>
+              <button class="tab" id="tab-mindmap">🧠 思维导图</button>
+            </span>
+            <span class="pane-hint" id="note-source"></span>
+          </div>
+          <article class="markdown" id="note-view">
+            <p class="placeholder">尚未生成笔记。请先点击「① 开始转写」，转写完成后笔记会自动生成。</p>
+          </article>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <span>📄 逐字稿</span>
+            <input id="tx-search" class="tx-search" type="search" placeholder="搜索…">
+          </div>
+          <p class="tx-note" id="tx-note" hidden></p>
+          <div class="transcript" id="transcript-view">
+            <p class="placeholder">尚未生成转写内容。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ 录音弹窗 ============ -->
+<div class="modal" id="record-modal" hidden>
+  <div class="modal-card">
+    <h3>正在录音</h3>
+    <div class="rec-timer" id="rec-timer">00:00</div>
+    <canvas id="rec-wave" width="420" height="64"></canvas>
+    <p class="hint">建议：把手机/电脑放在前排，录音时尽量别翻书、别说话。</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btn-rec-cancel">丢弃</button>
+      <button class="btn primary" id="btn-rec-stop">■ 停止并保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 新建录音（导入/录音保存前先问一遍） ============ -->
+<div class="modal" id="new-lecture-modal" hidden>
+  <div class="modal-card">
+    <h3 id="new-lecture-title">新建录音</h3>
+    <p class="hint" id="new-lecture-sub">给这条录音起个名字，顺便定一下笔记怎么写。只有这一条录音会用到这些设置。</p>
+
+    <div class="field">
+      <label for="nl-title">录音名</label>
+      <input id="nl-title" type="text" placeholder="如：数据结构 · 二叉树的遍历" spellcheck="false">
+    </div>
+
+    <div class="field">
+      <label for="nl-extra">提示词 <span class="hint">（空白即默认）</span></label>
+      <textarea id="nl-extra" rows="3" spellcheck="false" placeholder="如：这是法学课，请把法条编号写全；重点用【】标出"></textarea>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label for="nl-style">笔记风格</label>
+        <select id="nl-style">
+          <option value="exam">应试重点版</option>
+          <option value="outline">提纲版</option>
+          <option value="cornell">康奈尔版</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="nl-maxpoints">每个主题几条重点</label>
+        <select id="nl-maxpoints">
+          <option value="0">自适应（按主题长短定）</option>
+          <option value="3">3 条 — 极简</option>
+          <option value="5">5 条 — 适中</option>
+          <option value="6">6 条 — 默认</option>
+          <option value="8">8 条 — 详细</option>
+          <option value="10">10 条 — 很详细</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint" id="nl-style-desc"></p>
+    <p class="hint" id="nl-hint">风格、重点条数、提示词都只对这条录音生效。以后想改，打开它点「笔记设置」。</p>
+
+    <div class="modal-actions">
+      <button class="btn ghost" id="btn-nl-cancel">取消</button>
+      <button class="btn primary" id="btn-nl-create">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 设置 ============ -->
+<div class="modal" id="settings-modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3>⚙ 设置</h3>
+      <button class="icon-btn" id="btn-settings-close">✕</button>
+    </div>
+    <div class="settings-body">
+
+      <section class="sect">
+        <h4>① 服务商（转写 + AI 笔记共用一家）</h4>
+        <div class="field">
+          <label>服务商</label>
+          <select id="s-provider">
+            <option value="local">本地 · 免费、不上传</option>
+          </select>
+          <p class="hint" id="s-provider-hint"></p>
+        </div>
+        <p class="hint">转写与 AI 笔记共用一家服务商，同一把 Key 两处通用。如不清楚如何申请 API Key：<button type="button" class="linklike" id="btn-help-api">查看申请教程</button></p>
+
+        <div class="grid2" data-for="local">
+          <div class="field">
+            <label>运算设备</label>
+            <select id="s-local-device">
+              <option value="auto">自动（有 WebGPU 就用显卡）</option>
+              <option value="webgpu">强制 WebGPU（显卡加速）</option>
+              <option value="wasm">强制 WASM（CPU，慢但兼容）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>模型下载源</label>
+            <select id="s-model-host">
+              <option value="https://hf-mirror.com">HF 镜像 hf-mirror.com（国内推荐）</option>
+              <option value="https://huggingface.co">HuggingFace 官方</option>
+            </select>
+          </div>
+          <div class="field wide">
+            <label>依赖库 CDN（不通会自动换备用源）</label>
+            <input id="s-cdn" placeholder="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3">
+          </div>
+        </div>
+
+        <!-- 本地转写模型：同样是卡片选择器。下载体积差十倍（250MB ~ 1.3GB），
+             只写个仓库名用户没法判断该选哪个。 -->
+        <div class="field wide" data-for="local">
+          <label>本地转写模型 <span class="hint" id="local-model-now"></span></label>
+          <div class="model-list" id="local-model-list"></div>
+          <div class="model-custom" id="local-model-custom" hidden>
+            <input id="s-local-model" placeholder="onnx-community/whisper-large-v3-turbo" autocomplete="off" spellcheck="false">
+            <span class="hint">可填 HuggingFace 上任意兼容的仓库名</span>
+          </div>
+        </div>
+
+        <div class="grid2" data-for="cloud">
+          <div class="field">
+            <label>接口地址（自定义时填）</label>
+            <input id="s-asr-endpoint" placeholder="https://your-server/v1/audio/transcriptions">
+          </div>
+        </div>
+
+        <!-- 转写模型：卡片式选择器。
+             为什么不再用一行自由文本框：填完 Key 之后用户根本不知道自己在用哪个模型，
+             也不知道还有免费档和更准的付费档可选 —— 只会一直用预设那一档。
+             卡片把「免费 / 性价比 / 更强」和一句话代价直接摆出来。
+             「其他」那张卡保留手填能力（自建 faster-whisper / 中转站）。 -->
+        <div class="field wide" data-for="cloud">
+          <label>转写模型 <span class="hint" id="asr-model-now"></span></label>
+          <div class="model-list" id="asr-model-list"></div>
+          <div class="model-custom" id="asr-model-custom" hidden>
+            <input id="s-asr-model" placeholder="FunAudioLLM/SenseVoiceSmall" autocomplete="off" spellcheck="false">
+            <span class="hint">照抄服务商文档里的写法</span>
+          </div>
+        </div>
+        <div class="field wide" data-for="key" id="key-field">
+          <label>API Key（转写 + 笔记共用这一把）</label>
+
+          <!-- 第一行 = 当前正在用的那一把。平时是密码点，点眼睛才显示明文
+               （本机才看得到；手机/局域网根本拿不到明文）。
+               点 ✓ 把它设为「正在用」，点「保存」才真正写进配置。 -->
+          <div class="key-row">
+            <input id="s-key" type="password" placeholder="粘贴你的 API Key" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn tiny ghost" id="btn-reveal-key" title="显示/隐藏 Key">👁</button>
+            <button type="button" class="btn tiny ghost" id="btn-save-key" title="用这一格里的 Key">✓</button>
+          </div>
+
+          <!-- 下面每一行 = 一把已保存的 Key，点一下就切过去（切过去后再点保存）。
+               当前用的那条左边有竖条、底色更亮；删除按钮悬停才出现。 -->
+          <div class="key-list" id="key-list" hidden></div>
+          <p class="hint" id="key-hint"></p>
+          <button type="button" class="linklike danger" id="btn-clear-key">清掉当前用的 Key</button>
+        </div>
+        <button class="btn ghost tiny" data-for="cloud" id="btn-test-asr">检查云端转写配置</button>
+        <span class="test-result" id="asr-test-result"></span>
+        <p class="hint" data-for="cloud">此操作不发送音频、不产生费用，仅检查「地址 / 模型 / Key」是否填写完整。如需验证实际效果，可上传一段一分钟左右的录音进行转写。</p>
+
+        <div class="grid2">
+          <div class="field">
+            <label>录音语言</label>
+            <select id="s-language">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+              <option value="auto">自动识别</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="sect">
+        <h4>② AI 润色（可选）</h4>
+        <p class="hint">不启用也能用：默认的离线引擎会在本地挑重点。启用后，「AI 润色」能把口语整理得更通顺、结构更像复习资料。服务商和 Key 用上面①选的同一家。</p>
+        <label class="check"><input type="checkbox" id="s-llm-enabled"> 启用大模型笔记</label>
+        <div class="field">
+          <label>笔记模型 <span class="hint" id="llm-model-now"></span></label>
+          <div class="model-list" id="llm-model-list"></div>
+          <!-- 手填入口（自定义中转站、或想用预设里没有的型号）。
+               平时藏在「其他」那张卡后面，点开才显示 —— 默认铺一个空输入框
+               会让人以为必须自己填。 -->
+          <div class="model-custom" id="llm-model-custom" hidden>
+            <input id="s-llm-model" placeholder="qwen2.5-7b" autocomplete="off" spellcheck="false">
+            <span class="hint">照抄服务商文档里的模型名</span>
+          </div>
+          <p class="hint" id="s-llm-hint"></p>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>接口地址（已自动填写，一般无需修改）</label>
+            <input id="s-llm-base" placeholder="https://api.siliconflow.cn/v1">
+          </div>
+        </div>
+        <button class="btn ghost tiny" id="btn-test-llm">测试连通性</button>
+        <span class="test-result" id="llm-test-result"></span>
+        <p class="hint">低配电脑建议用云端：本机跑 7B 模型常驻要 6GB 左右显存，边转写边做笔记容易卡。怎么申请 Key：<button type="button" class="linklike" id="btn-help-api-llm">查看申请教程</button></p>
+      </section>
+
+      <section class="sect">
+        <h4>③ 存储位置</h4>
+        <p class="hint" id="storage-intro">录音和模型缓存放在哪。默认就在安装目录下面；想换到别的盘，把路径改一下再点「迁移」，现有文件会复制过去（<b>旧目录不会删</b>）。</p>
+        <div class="field">
+          <label for="s-lect-dir">录音目录 <span class="hint" id="s-lect-dir-now"></span></label>
+          <div class="path-row">
+            <input id="s-lect-dir" type="text" class="path-input" spellcheck="false" placeholder="留空 = 默认位置">
+            <button type="button" class="icon-btn" id="btn-lect-dir-copy" title="复制这个路径">⧉</button>
+            <button type="button" class="icon-btn" id="btn-lect-dir-open" title="在文件管理器里打开">📂</button>
+            <button type="button" class="btn ghost tiny" id="btn-lect-dir-move">迁移</button>
+            <button type="button" class="btn ghost tiny" id="btn-lect-dir-reset">重置</button>
+          </div>
+          <span class="hint" id="s-lect-dir-hint"></span>
+        </div>
+        <div class="field">
+          <label for="s-models-dir">模型缓存目录 <span class="hint" id="s-models-dir-now"></span></label>
+          <div class="path-row">
+            <input id="s-models-dir" type="text" class="path-input" spellcheck="false" placeholder="留空 = 默认位置">
+            <button type="button" class="icon-btn" id="btn-models-dir-copy" title="复制这个路径">⧉</button>
+            <button type="button" class="icon-btn" id="btn-models-dir-open" title="在文件管理器里打开">📂</button>
+            <button type="button" class="btn ghost tiny" id="btn-models-dir-move">迁移</button>
+            <button type="button" class="btn ghost tiny" id="btn-models-dir-reset">重置</button>
+          </div>
+          <span class="hint" id="s-models-dir-hint"></span>
+        </div>
+      </section>
+
+      <section class="sect">
+        <h4>④ 关于与协议</h4>
+        <div class="about-row">
+          <span class="hint" id="about-version">版本 —</span>
+          <button type="button" class="linklike" id="btn-show-license">用户协议</button>
+          <button type="button" class="linklike" id="btn-show-privacy">隐私政策</button>
+          <span class="hint" id="about-agree"></span>
+        </div>
+      </section>
+
+      <section class="sect" id="diag-sect">
+        <h4>⑤ 环境自检</h4>
+        <div class="diag" id="diag"></div>
+      </section>
+
+    </div>
+    <div class="modal-foot">
+      <span class="hint">设置存在数据目录下的 <code>config.json</code>（默认在 <code>%LOCALAPPDATA%\LectureNotes\data</code>，实际位置见上面 ③ 存储位置）。Key 只存在这台电脑上，局域网访问时不会下发。</span>
+      <div>
+        <!-- 打赏入口放在这排按钮里，不放在滚动的设置正文里 ——
+             正文滚到底才看得见，等于藏起来了；这一排永远固定在最底部。 -->
+        <button class="btn ghost tiny" id="btn-show-donate" title="觉得好用的话，可以请人家喝杯奶茶">☕ 请人家喝奶茶</button>
+        <button class="btn ghost tiny danger" id="btn-shutdown" title="关闭后台服务（关掉整个程序）">⏻ 退出服务</button>
+        <button class="btn ghost" id="btn-settings-cancel">取消</button>
+        <button class="btn primary" id="btn-settings-save">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 用户协议 / 隐私政策 ============ -->
+<!-- 首次启动时自动弹出（还不算「同意过」的话），也可以随时从设置里再打开。 -->
+<div class="modal" id="agree-modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3 id="agree-title">📄 用户协议</h3>
+      <button class="icon-btn" id="btn-agree-close">✕</button>
+    </div>
+    <div class="settings-body help-body">
+      <div class="tabs agree-tabs">
+        <button class="tab active" id="tab-license" type="button">用户协议</button>
+        <button class="tab" id="tab-privacy" type="button">隐私政策</button>
+      </div>
+      <pre class="agree-text" id="agree-text">正在读取…</pre>
+      <p class="hint" id="agree-foot"></p>
+    </div>
+    <div class="modal-foot">
+      <span class="hint">这份协议随软件一起放在安装目录里，随时可以再看。</span>
+      <div class="modal-actions" style="margin:0">
+        <button class="btn ghost" id="btn-agree-later">以后再说</button>
+        <button class="btn primary" id="btn-agree-ok">我已阅读并同意</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 打赏 ============ -->
+<!--
+  收款码图片放在 public/donate/ 下面：
+    public/donate/wechat.png/.jpg     微信收款码
+    public/donate/alipay.png/.jpg     支付宝收款码
+  两个都放就并排显示两个；只放一个就只显示那一个；一个都没有就显示
+  「还没放收款码」的占位说明（开发状态下看得见，发出去之前放好就行）。
+  图片不存在时网页不会报 404 崩掉 —— app.js 里先探测再显示。
+
+  这个弹窗有两个出处：
+    · 每次启动程序时自动弹一次（没勾「不再提示」的话）
+    · 设置底部「☕ 请人家喝奶茶」按钮，想看才点
+  自动弹的时候把「下次再说」写成「先看看别处」，手动打开时那句不显示。
+-->
+<div class="modal" id="donate-modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>☕ 请人家喝杯奶茶</h3>
+      <button class="icon-btn" id="btn-donate-close">✕</button>
+    </div>
+    <div class="settings-body">
+      <p class="hint">
+        这个软件是免费的，也没有登录、没有广告、不传你的录音。
+        如果它真的帮你省下了抄笔记的时间，可以请人家喝杯奶茶 —— 不打赏也照样能用，一点功能都不会少。
+      </p>
+      <div class="donate-codes" id="donate-codes"></div>
+      <p class="hint">米饭管饱，奶茶是加餐 🍚</p>
+      <label class="donate-opt">
+        <input type="checkbox" id="donate-never" />
+        <span>以后不要再提示我</span>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <span class="hint">钱直接到作者手里，不经过任何第三方平台。</span>
+      <div class="modal-actions" style="margin:0">
+        <button class="btn ghost" id="btn-donate-later">下次再说</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 使用说明 ============ -->
+<div class="modal" id="help-modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3>📖 使用说明</h3>
+      <button class="icon-btn" id="btn-help-close">✕</button>
+    </div>
+    <div class="settings-body help-body">
+      <h4>最快的用法</h4>
+      <ol>
+        <li>使用手机自带的「录音机」录制整节课（保持连续录制，中途无需暂停）。</li>
+        <li>课后让手机连接 Wi-Fi，用手机浏览器打开下方局域网地址：
+          <div class="code-line" id="help-lan">（启动时加了 --host 0.0.0.0 才会显示）</div>
+        </li>
+        <li>在手机页面点「导入录音」，选中刚才录的文件，等进度条走完。</li>
+        <li>回到电脑浏览器，打开同一条录音，点「① 开始转写」，转写完笔记会自动出现。</li>
+        <li>点「导出 Word」，用 Word / WPS 打开就是一份复习笔记，也可以在里面另存为 PDF。</li>
+      </ol>
+      <h4>为什么转写建议在电脑上做？</h4>
+      <p>手机浏览器在 http 页面中没有麦克风权限，且本地 Whisper 依赖 WebGPU，手机端无法运行。因此：<b>手机负责录音与上传，电脑负责转写与整理。</b>若电脑配置较低，可在设置中改用云端转写接口。</p>
+      <h4>时间戳的用途</h4>
+      <p>笔记与逐字稿中的 <code>12:34</code> 均可点击，点击后音频将跳转到对应位置，便于回听核对。</p>
+      <h4>数据在哪？</h4>
+      <p>全部存在本地数据目录里（默认 <code>%LOCALAPPDATA%\LectureNotes\data</code>，装完想换盘就到 设置 → ③ 存储位置 改）：音频、逐字稿、笔记。不上传任何服务器（除非你自己开了云端转写）。整个目录拷走就是备份。</p>
+      <h4>长录音的注意事项</h4>
+      <ul>
+        <li>单段建议 90 分钟以内；特别长的课建议按节次分开录、分开导。</li>
+        <li>浏览器里做本地转写时，程序要把整段音频解码进内存，1 小时立体声大约占 1GB 内存。内存吃紧就改用云端转写。</li>
+        <li>转写过程中请不要关掉这个标签页。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 云端 API 接入教程 ============ -->
+<div class="modal" id="api-modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3>🔑 云端 API 怎么配</h3>
+      <button class="icon-btn" id="btn-api-close">✕</button>
+    </div>
+    <div class="settings-body help-body" id="api-body">
+      <p class="hint">正在读取教程…</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<input type="file" id="file-input" accept="audio/*,video/mp4,video/*" multiple hidden>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

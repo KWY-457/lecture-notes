@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ASR 自检中…</title>
+<style>
+  body { font: 14px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; margin: 24px; background:#f6f7f9; color:#111; }
+  h1 { font-size: 18px; }
+  #log { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:10px 14px; max-height:380px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  .ok { color:#15803d; font-weight:600; } .bad { color:#b91c1c; font-weight:600; }
+  #summary { font-size:16px; font-weight:600; margin:10px 0; }
+</style>
+</head>
+<body>
+<h1>本地 Whisper 转写 · 链路自检</h1>
+<div id="summary">运行中…（首次会下载 tiny 模型约 40MB，请等 1-3 分钟）</div>
+<div id="log"></div>
+
+<script type="module">
+const params = new URLSearchParams(location.search);
+const CFG = {
+  model: params.get('model') || 'Xenova/whisper-tiny',
+  device: params.get('device') || 'wasm',   // 无头环境没有显卡，强制 CPU 后端
+  cdn: 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3',
+  modelHost: 'https://hf-mirror.com/',
+};
+
+const logEl = document.getElementById('log');
+const msgs = [];
+const t0 = Date.now();
+const log = (kind, text) => {
+  msgs.push({ kind, text });
+  const line = document.createElement('div');
+  line.className = kind === 'err' ? 'bad' : kind === 'ok' ? 'ok' : '';
+  line.textContent = `[${((Date.now() - t0) / 1000).toFixed(1)}s] ${text}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+};
+
+function finish(ok, detail) {
+  document.title = ok ? 'ASR-SELFTEST-OK' : 'ASR-SELFTEST-FAIL';
+  const el = document.getElementById('summary');
+  el.className = ok ? 'ok' : 'bad';
+  el.textContent = (ok ? '✅ 通过：' : '❌ 失败：') + detail;
+}
+
+/** 3 秒静音（16kHz 单声道），只用来看链路能否跑通 */
+function silence(seconds = 3, rate = 16000) {
+  return new Float32Array(Math.floor(seconds * rate));
+}
+
+let sawLibProgress = false, sawProbeOk = false, sawLoaded = false, sawDone = false;
+
+try {
+  log('info', '创建 Worker…');
+  const worker = new Worker(new URL('./worker-asr.js', import.meta.url), { type: 'module' });
+  const audio = silence();
+
+  const timer = setTimeout(() => {
+    log('err', '总超时（6 分钟），判定失败');
+    worker.terminate();
+    finish(false, '超时未完成');
+  }, 360000);
+
+  worker.onerror = (e) => {
+    clearTimeout(timer);
+    log('err', 'Worker 出错：' + (e.message || '未知'));
+    finish(false, 'Worker 出错：' + (e.message || '未知'));
+  };
+
+  worker.onmessage = (ev) => {
+    const m = ev.data || {};
+    if (m.type === 'progress') {
+      log('info', m.message || '');
+      if (/正在加载转写库/.test(m.message || '')) sawLibProgress = true;
+      if (/模型源可用/.test(m.message || '')) sawProbeOk = true;
+      if (/Failed to fetch/i.test(m.message || '')) log('err', '出现 Failed to fetch');
+    } else if (m.type === 'loaded') {
+      sawLoaded = true;
+      log('ok', `模型已加载：${m.model}，后端 ${m.device}，库来自 ${m.cdn || '?'}`);
+    } else if (m.type === 'partial') {
+      log('info', `已出 ${m.segments.length} 段`);
+    } else if (m.type === 'done') {
+      sawDone = true;
+      clearTimeout(timer);
+      const segs = m.segments || [];
+      log('ok', `转写完成，返回 ${segs.length} 段，文本长度 ${(m.text || '').length}`);
+      const problems = [];
+      if (!sawLibProgress) problems.push('没看到依赖库加载');
+      if (!sawProbeOk) problems.push('模型源探测没通过');
+      if (!sawLoaded) problems.push('模型没加载成功');
+      if (msgs.some((x) => /Failed to fetch/i.test(x.text))) problems.push('出现 Failed to fetch');
+      finish(problems.length === 0, problems.length ? problems.join('；') : `库加载→模型源探测→模型下载→推理 全链路正常（${((Date.now() - t0) / 1000).toFixed(1)} 秒）`);
+    } else if (m.type === 'error') {
+      clearTimeout(timer);
+      log('err', '错误：' + m.message);
+      finish(false, m.message || '未知错误');
+    }
+  };
+
+  log('info', `下发任务：模型 ${CFG.model}，源 ${CFG.modelHost}，3 秒静音`);
+  worker.postMessage(
+    { type: 'run', audio, sampleRate: 16000, language: 'zh', windowSec: 600, cfg: CFG },
+    [audio.buffer]
+  );
+} catch (e) {
+  log('err', '页面异常：' + e.message);
+  finish(false, e.message);
+}
+</script>
+</body>
+</html>

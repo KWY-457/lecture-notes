@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>LectureNotes 自检</title>
+<style>
+  body { font: 14px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; margin: 24px; background:#f6f7f9; color:#111; }
+  h1 { font-size: 18px; }
+  .row { padding: 4px 10px; border-radius: 6px; margin: 3px 0; background:#fff; border:1px solid #e5e7eb; }
+  .pass { color:#15803d; } .fail { color:#b91c1c; font-weight:600; }
+  .k { display:inline-block; min-width: 260px; }
+  pre { background:#fff; border:1px solid #e5e7eb; padding:10px; border-radius:8px; overflow:auto; max-height:420px; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>讲义笔记 · 浏览器端自检</h1>
+<div id="summary">运行中…</div>
+<div id="results"></div>
+<h3>离线引擎输出预览</h3>
+<pre id="preview"></pre>
+
+<script type="module">
+import { analyze, renderMarkdown as _rm, fmtTime, splitSentences, extractKeywords, tokens } from './summarize.js';
+import { renderMarkdown } from './md.js';
+import { chunkTranscript, linkifyTimestamps } from './llm.js';
+import { transcribeLocal, decodeToMono16k } from './asr-local.js';
+
+const rows = [];
+let pass = 0, fail = 0;
+function check(name, cond, detail = '') {
+  const ok = !!cond;
+  ok ? pass++ : fail++;
+  rows.push({ name, ok, detail: cond ? '' : String(detail) });
+}
+function report() {
+  const host = document.getElementById('results');
+  host.innerHTML = rows.map(r => `<div class="row"><span class="k">${r.ok ? '✅' : '❌'} ${r.name}</span><span class="${r.ok ? 'pass' : 'fail'}">${r.ok ? 'PASS' : 'FAIL ' + r.detail}</span></div>`).join('');
+  const s = document.getElementById('summary');
+  s.innerHTML = `<b class="${fail ? 'fail' : 'pass'}">${pass} 通过 / ${fail} 失败</b>`;
+  document.title = fail ? `SELFTEST-FAIL-${fail}` : `SELFTEST-OK-${pass}`;
+}
+
+/* ---------- 1. 分句 ---------- */
+const sents = splitSentences('先明确一个定义：所谓二叉树的遍历，是指按照某种规则依次访问树中每个结点，并且每个结点只访问一次的过程。这个是今天的重点，考试一定会考。');
+check('中文分句', sents.length === 2, JSON.stringify(sents));
+check('小数点/编号不被切开', splitSentences('作业是课后习题 6.3 到 6.8，下周三之前提交。').length === 1, JSON.stringify(splitSentences('作业是课后习题 6.3 到 6.8，下周三之前提交。')));
+check('语义单位含中文 bigram', tokens('二叉树遍历').size >= 3, tokens('二叉树遍历').size);
+
+/* ---------- 2. 离线引擎 ---------- */
+const DEMO = [
+  [0, 32, '好，那我们今天接着讲二叉树的遍历。上节课我们讲了树的基本概念。'],
+  [32, 78, '先明确一个定义：所谓二叉树的遍历，是指按照某种规则依次访问树中每个结点，并且每个结点只访问一次的过程。这个是今天的重点，考试一定会考。'],
+  [78, 140, '那么遍历主要有四种方式，第一种是先序遍历，顺序是根、左、右；第二种是中序遍历，顺序是左、根、右；第三种是后序遍历，顺序是左、右、根。'],
+  [140, 196, '这里特别要注意的是，中序遍历在二叉搜索树上的结果一定是一个递增序列，这个性质非常关键，大家一定要记住。'],
+  [196, 250, '举个例子，假设根节点是 5，左子树是 3，右子树是 8，那么中序遍历的结果就是 3, 5, 8，可以看到它确实是递增的。'],
+  [250, 310, '接下来我们看遍历的实现。因为树本身是递归定义的，所以递归实现是最自然的，先序遍历的代码就是先访问根节点，然后递归遍历左右子树。'],
+  [310, 372, '但是递归有一个问题，就是当树很深的时候会导致栈溢出，所以实际工程中我们往往用非递归的方式，也就是借助栈来模拟递归过程。'],
+  [372, 430, '非递归的先序遍历思路是：第一，把根节点入栈；第二，弹出栈顶元素并访问；第三，如果右孩子不为空就入栈；第四，如果左孩子不为空就入栈。'],
+  [490, 545, '我们再来看看时间复杂度。不管哪种遍历方式，每个结点都恰好被访问一次，所以时间复杂度都是 O(n)，空间复杂度取决于树的高度。'],
+  [545, 600, '最后总结一下今天的重点：第一，四种遍历方式的访问顺序必须背下来；第二，中序遍历二叉搜索树得到递增序列这个性质要会用。'],
+  [600, 650, '作业是课后习题 6.3 到 6.8，下周三之前提交到学习通，下次课我们讲线索二叉树。'],
+];
+const segments = DEMO.map(([start, end, text]) => ({ start, end, text }));
+const t0 = performance.now();
+const note = analyze({ segments, meta: { title: '数据结构 · 二叉树的遍历', course: '数据结构', duration: 690 }, options: { style: 'exam' } });
+const ms = Math.round(performance.now() - t0);
+check('analyze() 成功', note.ok === true, note.error);
+check('切出多个主题', note.outline.length >= 2, note.outline.length);
+check('每个主题都有重点句', note.outline.every(t => t.points.length > 0), JSON.stringify(note.outline.map(t => t.points.length)));
+check('关键词数量足够', note.keywords.length >= 8, note.keywords.map(k => k.term).join(','));
+check('抓到二叉树的遍历的定义', note.definitions.some(d => d.term.includes('遍历')), JSON.stringify(note.definitions.map(d => d.term)));
+check('生成自测题', note.questions.length >= 3, note.questions.length);
+check('识别出作业安排', note.cueGroups.some(g => g.key === 'task' && g.items.length), JSON.stringify(note.cueGroups.map(g => g.key)));
+check('时间戳落在音频时长内', note.outline.every(t => t.start >= 0 && t.start <= 690), '');
+check('关键词无碎片噪声', !note.keywords.slice(0, 6).some(k => /^(叉树|代码|间复|归遍|个结)/.test(k.term)), note.keywords.slice(0, 8).map(k => k.term).join(','));
+check('Markdown 生成长度合理', note.markdown.length > 600, note.markdown.length);
+check('Markdown 含可跳转时间戳', note.markdown.includes('](#t='), '');
+check('大纲含时间轴锚点', /\[00:\d\d\]\(#t=/.test(note.markdown), '');
+check('离线分析耗时 < 3s', ms < 3000, ms + 'ms');
+check('fmtTime 格式正确', fmtTime(3725) === '01:02:05', fmtTime(3725));
+
+const cornell = analyze({ segments, meta: { title: 'x' }, options: { style: 'cornell' } });
+check('康奈尔风格生成表格', cornell.markdown.includes('| 提示 / 线索 | 笔记要点 |'), '');
+const outlineStyle = analyze({ segments, meta: { title: 'x' }, options: { style: 'outline' } });
+check('提纲风格也能生成', outlineStyle.ok && outlineStyle.markdown.length > 500, '');
+check('空输入被优雅处理', analyze({ segments: [], meta: {} }).ok === false, '');
+
+/* ---------- 3. Markdown 渲染与 XSS ---------- */
+const html = renderMarkdown('# 标题\n\n- **重点**：<script>alert(1)<\/script>\n- 见 [01:18](#t=78)\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n');
+check('Markdown 渲染标题', html.includes('<h1>标题</h1>'), '');
+check('XSS 被转义', html.includes('&lt;script&gt;') && !html.includes('<script>'), '');
+check('时间戳变成跳转锚点', html.includes('class="ts"') && html.includes('data-t="78"'), '');
+check('表格渲染', html.includes('<table>') && html.includes('<th>a</th>'), '');
+check('粗体渲染', html.includes('<strong>重点</strong>'), '');
+
+/* ---------- 4. AI 笔记工具 ---------- */
+const chunks = chunkTranscript(segments, 300);
+check('逐字稿分块', chunks.length >= 2 && chunks.flat().length === segments.length, chunks.length);
+check('时间戳链接化', linkifyTimestamps('要点 [01:18] 结束').includes('[01:18](#t=78)'), linkifyTimestamps('要点 [01:18] 结束'));
+check('时间戳链接化（时分秒）', linkifyTimestamps('看 [01:02:05]').includes('#t=3725'), linkifyTimestamps('看 [01:02:05]'));
+check('不重复链接化', linkifyTimestamps('[01:18](#t=78)') === '[01:18](#t=78)', linkifyTimestamps('[01:18](#t=78)'));
+
+/* ---------- 5. 浏览器能力 ---------- */
+check('Web Audio 可用', typeof (window.AudioContext || window.webkitAudioContext) === 'function');
+check('OfflineAudioContext 可用', typeof OfflineAudioContext === 'function');
+check('decodeAudioData 可用', typeof (window.AudioContext || window.webkitAudioContext).prototype.decodeAudioData === 'function');
+check('Web Worker 可用', typeof Worker === 'function');
+check('MediaRecorder 可用', typeof MediaRecorder === 'function');
+check('本地转写模块已加载', typeof transcribeLocal === 'function' && typeof decodeToMono16k === 'function');
+const gpu = 'gpu' in navigator;
+rows.push({ name: `WebGPU ${gpu ? '可用（本地转写走显卡）' : '不可用（本地转写走 CPU，较慢）'}`, ok: true, detail: '' });
+pass++;
+
+/* ---------- 6. 服务端连通 ---------- */
+try {
+  const h = await fetch('/api/health').then(r => r.json());
+  check('服务端 /api/health 可达', h.ok === true, JSON.stringify(h).slice(0, 200));
+  const c = await fetch('/api/config').then(r => r.json());
+  check('服务端配置可读', c.ok === true && !!c.config.asr);
+  check('配置不下发密钥', c.config.llm.apiKey === '' && c.config.asr.apiKey === '');
+} catch (e) {
+  check('服务端连通', false, e.message);
+}
+
+document.getElementById('preview').textContent = note.markdown.slice(0, 2400);
+report();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+  没有找到 JavaScript 运行时。
+
+  这个网站需要一个 Node 运行时才能启动（不需要装 Python / ffmpeg / Docker）。
+  请任选一种：
+
+    1) 安装 Node.js（推荐）
+       打开 https://nodejs.org/zh-cn 下载 LTS 版，一路下一步即可。
+       装完关掉这个窗口，重新双击 start.cmd。
+
+    2) 已经有绿色版 node.exe
+       把环境变量 NODE_EXE 设成 node.exe 的完整路径，再双击 start.cmd。
+
+    3) 装了 DSH Desktop 也行
+       它会自带一个 Node 运行时，start.cmd 会自动找到并使用。

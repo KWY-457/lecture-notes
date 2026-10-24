@@ -1,0 +1,57 @@
+# ===== 数据（绝对不进仓库）=====
+# 录音、模型、配置、运行时握手文件。这些是"用户数据"，不是源码。
+# data/ 现在是 3.7G（lectures 182M + models 3.5G），一旦提交仓库就废了。
+data/
+!data/.gitkeep
+
+# 存储位置可以改到别处，但默认也可能出现在项目里
+lectures/
+models/
+*.gguf
+
+# ===== 浏览器配置（缓存，可随时重建）=====
+# 2026-10-24 之前这个目录能长到 4.3G（模型缓存 3.5G + Code Cache 333M）。
+# 现在代码已经不往项目里放了（见 helpers/launcher-src.vbs），但万一有旧残留也别提交。
+.browser-profile/
+
+# ===== 打包产物 =====
+packaging/output/
+packaging/stage/
+*.exe
+*.msi
+
+# ===== 临时文件与探针 =====
+_scratch/
+*.log
+*.err.log
+server.err.log
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+
+# ===== 手工备份（有 git 之后就不需要了）=====
+*.bak
+*.bak-*
+*.bak.*
+*.orig
+
+# ===== Node =====
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.cache/
+dist/
+
+# ===== 本地大模型部署目录 =====
+local-llm/
+*.onnx
+# onnx 模型如果确实需要提交（极少数情况），用 git add -f 强加
+
+# ===== 测试临时产物 =====
+tests/.tmp/
+tests/quality-baseline.json.tmp
