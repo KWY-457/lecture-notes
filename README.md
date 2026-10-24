@@ -22,7 +22,7 @@
 **结论：**
 - 语音识别这一层，**没有理由自己造轮子** —— 直接复用成熟的 Whisper 生态：浏览器端用 [🤗 Transformers.js](https://github.com/huggingface/transformers.js)（ONNX Runtime + WebGPU/WASM），云端可选硅基流动 SenseVoice / OpenAI / 任何 OpenAI 兼容接口（包括你自己搭的 faster-whisper、Whishper）。
 - 「手机录音导入 → 自动分主题 → 挑重点 → 生成笔记格式」这一层，**没有现成且好用的开源方案**，所以自己写了薄薄一层。
-- 你这台机器上**没有 Python、没有 Node、没有 ffmpeg、没有 Docker**（我都查过了），所以整个东西被设计成**零外部依赖**：服务端只用 Node 内置模块写了 400 行，前端是纯静态页面，转写在浏览器里跑。双击就能用。
+- 你这台机器上**没有 Python、没有 Node、没有 ffmpeg、没有 Docker**（我都查过了），所以整个东西被设计成**零外部依赖**：服务端只用 Node 内置模块（现在约 2700 行），前端是纯静态页面（约 3500 行 JS + 740 行 CSS），转写在浏览器里跑。双击就能用。
 
 ---
 
@@ -292,8 +292,13 @@ lecture-notes/
 │   ├── app.css             # 样式（自适应，手机可用）
 │   ├── app.js              # 主逻辑（列表 / 转写 / 笔记 / 导出 / 录音 / 设置）
 │   ├── summarize.js        # ★ 离线重点提取引擎（无依赖，浏览器与 Node 通用）
+│   ├── note.js             # 笔记结构：Markdown ↔ outline、思维导图标签抽取
+│   ├── denoise.js          # 抗噪（谱门限 + 平滑，浏览器与 Node 通用）
+│   ├── cleanup.js          # 转写后清洗：繁简、白名单、幻觉评分
+│   ├── providers.js        # 服务商注册表（四家 + 每家的模型与单价）
+│   ├── transcript.js       # 逐字稿结构 / 版本升级
 │   ├── md.js               # 极简 Markdown 渲染器（带 XSS 转义）
-│   ├── llm.js              # AI 笔记：分块 → 汇总，时间戳链接化
+│   ├── llm.js              # AI 润色：分块 → 汇总，时间戳链接化
 │   ├── asr-local.js        # 音频解码成 16kHz 单声道
 │   ├── worker-asr.js       # Web Worker 里跑 Whisper（CDN/模型源自动回退）
 │   └── selftest.html       # 浏览器端自检页（打开就能看各项能力是否可用）
@@ -301,9 +306,9 @@ lecture-notes/
 │   ├── lecture-notes.ico        # 图标
 │   ├── launcher-src.vbs         # 启动器模板（装到项目根目录的 启动.vbs）
 │   ├── stop-src.vbs             # 停止脚本模板
-│   ├── model-start-src.vbs      # 本地模型启动模板（装到 D:\Download\AI\start-llm.vbs）
+│   ├── model-start-src.vbs      # 本地模型启动模板（装到数据目录的 start-llm.vbs）
 │   ├── model-stop-src.vbs       # 本地模型停止模板
-│   ├── local-llm-path.txt       # 指向本地模型启动脚本（保持纯 ASCII）
+│   ├── local-llm-path.txt       # 指向本地模型启动脚本（开发机用，不进安装包）
 │   ├── setup-local-llm.ps1      # 本地大模型一键部署 / 修复
 │   └── no-node.zh.txt           # 找不到 Node 时的中文提示
 └── tests/
@@ -317,7 +322,7 @@ lecture-notes/
     ├── test-provider-migration.mjs  # 老配置迁移（收掉的服务商 → custom / local，41 项）
     ├── test-llm-prompt.mjs     # AI 笔记提示词：重点条数真的生效（17 项，不联网）
     ├── test-mindmap-labels.mjs # 思维导图标签抽取（19 项，不联网）
-    ├── check-quality-baseline.mjs  # 转写质量基线回归（56 项）
+    ├── check-quality-baseline.mjs  # 转写质量基线回归（48 项）
     ├── browser-check.mjs       # 真实浏览器验证（无头 Chrome + CDP，58 项 + 截图）
     ├── gen-note-local.mjs      # 用本地模型重新生成某条录音的笔记并计时
     ├── seed-demo.mjs           # 塞一条示例课，方便先体验

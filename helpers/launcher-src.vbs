@@ -189,10 +189,41 @@ Function Healthy(p)
 End Function
 
 ' ---- 极简 JSON 取值（只认 {"key": value}，够用了，不引第三方库）----
+'
+' 2026-10-24 改：原来只找第一个 "port" / "secret" 字样，然后往后找冒号。
+' 只要值里先出现同样的字样就全读错 —— 比如 dataDir 是 "C:\Users\porter\..."
+' 时，"port" 会先命中 porter 那段（虽然那个不是带引号的键，但任何
+' 值里写成 "port" 的都能命中）。现在要求「键名后面紧跟冒号」才算数。
+'
+' 找 "key" : 这样的位置，找不到返回 0
+Function FindKeyPos(s, key)
+  Dim m, p, c, limit
+  FindKeyPos = 0
+  m = 1
+  limit = Len(s)
+  Do While m > 0 And m <= limit
+    m = InStr(m, s, """" & key & """")
+    If m = 0 Then Exit Function
+    p = m + Len(key) + 2
+    Do While p <= limit
+      c = Mid(s, p, 1)
+      If c = ":" Then
+        FindKeyPos = m
+        Exit Function
+      ElseIf c = " " Or c = vbTab Or c = vbCr Or c = vbLf Then
+        p = p + 1
+      Else
+        Exit Do          ' 这个 "key" 后面不是冒号，是值里的字样，继续往后找
+      End If
+    Loop
+    m = m + 1
+  Loop
+End Function
+
 Function JsonNum(s, key, dflt)
   Dim m, v, c
   JsonNum = dflt
-  m = InStr(s, """" & key & """")
+  m = FindKeyPos(s, key)
   If m = 0 Then Exit Function
   m = InStr(m, s, ":")
   If m = 0 Then Exit Function
@@ -214,7 +245,7 @@ End Function
 Function JsonStr(s, key, dflt)
   Dim m, e
   JsonStr = dflt
-  m = InStr(s, """" & key & """")
+  m = FindKeyPos(s, key)
   If m = 0 Then Exit Function
   m = InStr(m, s, ":")
   If m = 0 Then Exit Function
