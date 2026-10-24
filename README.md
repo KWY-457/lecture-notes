@@ -307,12 +307,13 @@ lecture-notes/
 │   ├── setup-local-llm.ps1      # 本地大模型一键部署 / 修复
 │   └── no-node.zh.txt           # 找不到 Node 时的中文提示
 └── tests/
-    ├── run-all.mjs             # 测试总入口（离线 18 项；加 --with-server 再跑 14 项服务层）
+    ├── run-all.mjs             # 测试总入口（离线 18 项；加 --with-server 再跑 15 项服务层）
     ├── test-summarize.mjs      # 离线引擎自测
     ├── api-test.ps1            # 服务端接口测试（42 项）
     ├── dom-app-test.mjs        # 前端集成测试（DOM 影子层，149 项）
     ├── test-integrations.mjs   # 云端转写 / 大模型代理测试（27 项）
     ├── test-storage.mjs        # 存储位置（换盘 / 改回默认 / 打开文件夹，45 项）
+    ├── test-lan.mjs            # 手机访问开关（默认关、关着 403、开了放行、外机关不了，25 项）
     ├── test-provider-migration.mjs  # 老配置迁移（收掉的服务商 → custom / local，41 项）
     ├── test-llm-prompt.mjs     # AI 笔记提示词：重点条数真的生效（17 项，不联网）
     ├── test-mindmap-labels.mjs # 思维导图标签抽取（19 项，不联网）
@@ -323,7 +324,7 @@ lecture-notes/
     └── shots/                  # 真实浏览器截图（桌面 / 手机 / 设置）
 ```
 
-测试总计 **32 项**（离线 18 + 服务层 14），跑一遍约 **320 秒**（实测在 304~409 秒之间浮动，看机器忙不忙）。加上需要额外环境的 4 项（真本地大模型 / 真云端 Key / 真显卡）和 4 项真浏览器 CDP 探针，`tests/` 下现有 66 个脚本。
+测试总计 **33 项**（离线 18 + 服务层 15），跑一遍约 **305 秒**（实测在 304~409 秒之间浮动，看机器忙不忙）。加上需要额外环境的 4 项（真本地大模型 / 真云端 Key / 真显卡）和 4 项真浏览器 CDP 探针，`tests/` 下现有 67 个脚本。
 
 本地大模型的东西在项目外面，单独放：
 
