@@ -314,7 +314,7 @@ lecture-notes/
 │   ├── setup-local-llm.ps1      # 本地大模型一键部署 / 修复
 │   └── no-node.zh.txt           # 找不到 Node 时的中文提示
 └── tests/
-    ├── run-all.mjs             # 测试总入口（离线 19 项；加 --with-server 再跑 15 项服务层）
+    ├── run-all.mjs             # 测试总入口（离线 20 项；加 --with-server 再跑 15 项服务层）
     ├── test-summarize.mjs      # 离线引擎自测
     ├── api-test.ps1            # 服务端接口测试（42 项）
     ├── dom-app-test.mjs        # 前端集成测试（DOM 影子层，149 项）
@@ -325,6 +325,7 @@ lecture-notes/
     ├── test-llm-prompt.mjs     # AI 笔记提示词：重点条数真的生效（17 项，不联网）
     ├── test-mindmap-labels.mjs # 思维导图标签抽取（19 项，不联网）
     ├── test-tex.mjs           # LaTeX 公式渲染（44 项，不联网）
+    ├── test-tex-style.mjs     # LaTeX 对齐（16 项，不联网）
     ├── check-quality-baseline.mjs  # 转写质量基线回归（48 项）
     ├── browser-check.mjs       # 真实浏览器验证（无头 Chrome + CDP，58 项 + 截图）
     ├── gen-note-local.mjs      # 用本地模型重新生成某条录音的笔记并计时
@@ -332,7 +333,7 @@ lecture-notes/
     └── shots/                  # 真实浏览器截图（桌面 / 手机 / 设置）
 ```
 
-测试总计 **34 项**（离线 19 + 服务层 15），跑一遍约 **325 秒**（实测在 305~410 秒之间浮动，看机器忙不忙）。其中 `check-quality-baseline.mjs` 在录音被重新转过之后会自己跳过并提示「旧基线作废」，属正常，不是失败。加上需要额外环境的 4 项（真本地大模型 / 真云端 Key / 真显卡）和 4 项真浏览器 CDP 探针，`tests/` 下现有 68 个脚本。
+测试总计 **35 项**（离线 20 + 服务层 15），跑一遍约 **325 秒**（实测在 305~410 秒之间浮动，看机器忙不忙）。其中 `check-quality-baseline.mjs` 在录音被重新转过之后会自己跳过并提示「旧基线作废」，属正常，不是失败。加上需要额外环境的 4 项（真本地大模型 / 真云端 Key / 真显卡）和 4 项真浏览器 CDP 探针，`tests/` 下现有 69 个脚本。
 
 本地大模型的东西在项目外面，单独放：
 
