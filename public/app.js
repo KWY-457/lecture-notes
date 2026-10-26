@@ -574,6 +574,34 @@ function renderEngineTag() {
 }
 
 /* ============================ 逐字稿 ============================ */
+
+/* 收起 / 展开逐字稿面板。
+   收起后整列压掉（.panes.tx-collapsed 里 .tx-pane display:none），笔记占满宽度；
+   同时笔记面板头右侧冒出「展开逐字稿」按钮，否则就再也点不回来了。
+   偏好存 localStorage（不存服务端）：这是「这个屏幕怎么看舒服」的纯显示偏好，
+   换台电脑不该被同步过去，也不该占配置、不该走 /api/config 往返。 */
+const TX_COLLAPSED_KEY = 'ln-tx-collapsed';
+
+function setTranscriptCollapsed(collapsed, { save = true } = {}) {
+  $('panes').classList.toggle('tx-collapsed', !!collapsed);
+  $('tx-reopen').hidden = !collapsed;
+  if (save) {
+    try {
+      localStorage.setItem(TX_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      // 隐私模式 / 存储被禁 —— 记不住就记不住，这次照样能收起，不该崩。
+    }
+  }
+}
+
+function restoreTranscriptCollapsed() {
+  let want = false;
+  try {
+    want = localStorage.getItem(TX_COLLAPSED_KEY) === '1';
+  } catch {}
+  setTranscriptCollapsed(want, { save: false });
+}
+
 function renderTranscript() {
   const host = $('transcript-view');
   const segs = currentTranscript().segments || [];
@@ -3204,6 +3232,9 @@ function bind() {
   };
 
   $('tx-search').oninput = () => renderTranscript();
+  // 收起 / 展开逐字稿面板（老大 m09768：「收起后左侧笔记可占满，这样看起来更加方便」）
+  $('btn-tx-collapse').onclick = () => setTranscriptCollapsed(true);
+  $('btn-tx-expand').onclick = () => setTranscriptCollapsed(false);
 
   $('audio').addEventListener('timeupdate', (e) => highlightAt(e.target.currentTime));
   // 时长兜底：上传时浏览器还没解析元数据，meta.duration 常是 0，于是
@@ -3464,6 +3495,9 @@ async function boot() {
   });
 
   bind();
+  // 逐字稿收起的偏好跟着这台机器走：上次收起了，这次打开还是收起。
+  // 放在 bind() 之后、拉数据之前 —— 早点应用，免得先画一遍双栏再跳成单栏。
+  restoreTranscriptCollapsed();
   try {
     const [cfg, health, agreement] = await Promise.all([
       api('/config'),

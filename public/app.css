@@ -282,6 +282,30 @@ a { color: var(--brand); }
 .markdown { padding: 14px 18px 30px; overflow-wrap: anywhere; }
 .transcript { padding: 8px 6px 24px; max-height: 70vh; overflow: auto; }
 
+/* 逐字稿面板右上角：搜索框 + 收起按钮，一组，别让它们被长标题挤散 */
+.pane-tools { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+#btn-tx-collapse { white-space: nowrap; }
+
+/* 收起逐字稿：整列压掉，笔记占满宽度。
+   和左边「收起录音列表」一个思路（display:none + grid 变一列），
+   但这里多了个回程入口：收起后笔记面板头右边会冒出「展开逐字稿」，
+   否则用户就再也找不到它了。
+   窄屏（≤1080px）本来就是上下单栏、逐字稿在下面，收起只是把它藏起来，
+   网格不用改（grid-template-columns 已经是 1fr）。 */
+.panes.tx-collapsed { grid-template-columns: 1fr; }
+.panes.tx-collapsed .tx-pane { display: none; }
+/* 正文也要跟着占满 —— 老大的原话是「收起后左侧笔记可占满」。
+   这里踩过一次：第一版写了 max-width:74ch + 居中，结果正文实际宽度跟收起前
+   差不多（1.15fr 那栏也就 660px 上下），白收了一场。
+   只留一个 1080px 的上限，防止带鱼屏上每行一百多个字来回扫。 */
+.panes.tx-collapsed .markdown,
+.panes.tx-collapsed .mm { max-width: 1080px; }
+
+/* 笔记面板头里的「展开逐字稿」入口，只在收起时出现 */
+.tx-reopen { flex: 0 0 auto; display: inline-flex; align-items: center; }
+.tx-reopen[hidden] { display: none; }
+.tx-reopen .btn { white-space: nowrap; }
+
 /* ---------- Markdown ---------- */
 .markdown h1 { font-size: 20px; margin: 4px 0 10px; }
 .markdown h2 { font-size: 16.5px; margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
@@ -785,6 +809,11 @@ body.dragging::after {
   .grid2 { grid-template-columns: 1fr; }
   .title-row h1 { font-size: 18px; }
   .player-bar audio { min-width: 100%; }
+  /* 笔记面板头在窄屏上允许换行：收起逐字稿后会多出「展开逐字稿」按钮，
+     三个块挤一行时右边那行来源说明会被压成「A/I/生/成」竖排单字
+     （2026-10-26 手机截图实测）。让它整行落到第二行，左对齐。 */
+  .pane-head { flex-wrap: wrap; }
+  .pane-head .pane-hint { flex: 1 1 100%; text-align: left; }
 }
 
 .hint.ok { color: var(--ok); }

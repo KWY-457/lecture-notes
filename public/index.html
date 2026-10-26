@@ -122,12 +122,15 @@
         <button class="btn tiny ghost" id="btn-cancel-job">取消</button>
       </div>
 
-      <div class="panes">
+      <div class="panes" id="panes">
         <div class="pane">
           <div class="pane-head">
             <span class="tabs">
               <button class="tab active" id="tab-note">📝 笔记</button>
               <button class="tab" id="tab-mindmap">🧠 思维导图</button>
+            </span>
+            <span class="tx-reopen" id="tx-reopen" hidden>
+              <button class="btn ghost tiny" id="btn-tx-expand" title="把逐字稿面板展开回来">📄 展开逐字稿</button>
             </span>
             <span class="pane-hint" id="note-source"></span>
           </div>
@@ -135,10 +138,13 @@
             <p class="placeholder">尚未生成笔记。请先点击「① 开始转写」，转写完成后笔记会自动生成。</p>
           </article>
         </div>
-        <div class="pane">
+        <div class="pane tx-pane">
           <div class="pane-head">
             <span>📄 逐字稿</span>
-            <input id="tx-search" class="tx-search" type="search" placeholder="搜索…">
+            <span class="pane-tools">
+              <input id="tx-search" class="tx-search" type="search" placeholder="搜索…">
+              <button class="btn ghost tiny" id="btn-tx-collapse" title="收起逐字稿，让笔记占满整行">收起 ›</button>
+            </span>
           </div>
           <p class="tx-note" id="tx-note" hidden></p>
           <div class="transcript" id="transcript-view">

@@ -56,6 +56,7 @@ const OFFLINE = [
   ['test-mindmap-labels.mjs', '思维导图标签：强信号优先、泛词不要、抽不出就空着'],
   ['test-tex.mjs', 'LaTeX 公式渲染：分数/上下标/希腊字母/极端输入不崩'],
   ['test-tex-style.mjs', 'LaTeX 对齐：分数贴数学轴、根号不沉底、括号跟着长高'],
+  ['test-tx-collapse.mjs', '逐字稿面板收起/展开：必须留回程入口、收起后正文真占满'],
   ['test-pdf-export.mjs', 'PDF 导出：只导正文、公式不裸奔、字体真的嵌进去（没装浏览器会跳过出 PDF 那几步）'],
   ['test-providers.mjs', '各家转写/大模型服务商的参数拼装'],
   ['test-worker-device-fallback.mjs', '显卡不可用时的回退'],
@@ -74,6 +75,8 @@ const SERVER = [
   ['diagnose-transcript.mjs', '逐字稿体检', 'lecture-then-url'],
   ['dom-app-test.mjs', '用影子 DOM 把 app.js 整个跑起来点一遍'],
   ['net-check.mjs', '网络与端口'],
+  // probe-chapters 是「要真调大模型」的探针：脚本自己套了 90 秒护栏，超时就打印跳过并 exit 0。
+  // 别把它的超时调到 180 秒以上 —— run-all 单个脚本上限就是 180 秒，先到先杀会变成假红（2026-10-26 踩过）。
   ['probe-chapters.mjs', '笔记章节结构'],
   ['test-agreement.mjs', '用户协议 / 隐私政策（会真的点一次同意，别指着正式数据跑）'],
   ['test-config-guard.mjs', '测试跑完必须把 data/config.json 原样还回去'],

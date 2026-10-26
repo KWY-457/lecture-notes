@@ -63,19 +63,41 @@ console.log(`离线标题样例: ${analysis.outline.slice(0, 5).map((t) => t.hea
 
 console.log('\n调用大模型…');
 const t0 = Date.now();
+// 自己套一层超时：服务端 llm.timeoutMs 默认 420 秒，而 run-all 给单个脚本的上限是
+// 180 秒（tests/run-all.mjs 的 TIMEOUT_MS）。大模型挂住不返回时，这个探针根本走不到
+// 下面的跳过分支，就先被 SIGKILL 判成「失败」了 —— 2026-10-26 全量测试里就是这样误红
+// 了一次（180.0s 正正好等于上限）。探针的目的只是看章节质量，等 90 秒没动静就该让位。
+const PROBE_TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS || 90000);
+const probeAc = new AbortController();
+let probeTimer = null;
+const probeTimeout = new Promise((_, reject) => {
+  probeTimer = setTimeout(() => {
+    const e = new Error(`探针等了 ${Math.round(PROBE_TIMEOUT_MS / 1000)} 秒没等到大模型返回，主动放弃（ETIMEDOUT）`);
+    e.code = 'PROBE_TIMEOUT';
+    // 光靠 Promise.race 放弃等待是不够的 —— 底层那次 fetch 还在跑，
+    // 事件循环被它挂着，进程根本不会退（实测还是卡满 90 秒才走）。
+    // 必须真的 abort，让 generateAINote 内部抛错、连接断掉。
+    try { probeAc.abort(); } catch {}
+    reject(e);
+  }, PROBE_TIMEOUT_MS);
+});
 // 这一步要真花钱、要真 Key。没配 Key 或 Key 失效的时候不该算「产品坏了」，
 // 而是明确跳过 —— 这个脚本是调提示词用的探针，不是回归测试。
 let out;
 try {
-  out = await generateAINote({
-    segments,
-    meta: { title: L.title, course: L.course, duration: L.duration, createdAt: L.createdAt },
-    analysis,
-    options: { style: 'exam', extraPrompt: '' },
-    onProgress: (m) => {
-      if (process.env.VERBOSE) console.log(`  [${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
-    },
-  });
+  out = await Promise.race([
+    generateAINote({
+      segments,
+      meta: { title: L.title, course: L.course, duration: L.duration, createdAt: L.createdAt },
+      analysis,
+      options: { style: 'exam', extraPrompt: '' },
+      signal: probeAc.signal,
+      onProgress: (m) => {
+        if (process.env.VERBOSE) console.log(`  [${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
+      },
+    }),
+    probeTimeout,
+  ]);
 } catch (e) {
   const msg = String(e && e.message || e);
   // 两种情况都算「环境没准备好」，不算产品坏了：
@@ -89,6 +111,8 @@ try {
   }
   throw e;
 }
+// 成功了就把护栏撤掉，否则那个 setTimeout 会让进程多活 90 秒才退。
+clearTimeout(probeTimer);
 console.log(`完成，用时 ${((Date.now() - t0) / 1000).toFixed(1)} 秒，${out.markdown.length} 字符\n`);
 
 const md = out.markdown;
