@@ -106,7 +106,7 @@ const H_SZ = { 1: 32, 2: 28, 3: 26, 4: 24, 5: 22, 6: 22 }; // 单位是半磅：
  * 只并「整行只有定界符」或「以定界符开头、本行就能闭合」的情形 ——
  * 正文中间偶然出现的 `\[` 不该被当成公式开头乱并。
  */
-function collapseDisplayMath(lines) {
+export function collapseDisplayMath(lines) {
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i].trim();
     if (raw !== '\\[') continue;
@@ -122,6 +122,9 @@ function collapseDisplayMath(lines) {
     const bodyText = lines.slice(i + 1, end).map((l) => l.trim()).join(' ');
     lines.splice(i, end - i + 1, '\\[' + bodyText + '\\]');
   }
+  // 返回同一个数组：原本的调用方是原地改，不看返回值；但 pdf.mjs 那边
+  // 是「拿一份新的行数组」，没有返回值就只能拿到 undefined。两种用法都照顾到。
+  return lines;
 }
 
 /**

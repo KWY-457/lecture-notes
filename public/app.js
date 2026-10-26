@@ -3098,6 +3098,7 @@ function bind() {
     renderNote();
   };
   $('btn-export-docx').onclick = () => exportAs('docx');
+  $('btn-export-pdf').onclick = () => exportAs('pdf');
   $('btn-copy').onclick = async () => {
     const md = state.current?.note?.markdown;
     if (!md) return toast('尚未生成笔记', 'err');
@@ -3366,7 +3367,50 @@ function exportAs(kind) {
   if (!L) return;
   const has = state.current?.note?.markdown;
   if (!has) return toast('尚未生成笔记', 'err');
-  location.href = `/api/lectures/${L.id}/export?kind=${kind}`;
+  if (kind !== 'pdf') {
+    location.href = `/api/lectures/${L.id}/export?kind=${kind}`;
+    return;
+  }
+  // PDF 走 fetch 而不是 location.href：要两秒左右，而且失败原因是**能说清**的
+  // （多半是这台机器没装 Chrome/Edge），得让用户看到那句话。
+  // 直接跳转会变成一个「下载了一页 JSON」的哑巴体验。
+  downloadPdf(L);
+}
+
+async function downloadPdf(L) {
+  const btn = $('btn-export-pdf');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '导出中…';
+  try {
+    const resp = await fetch(`/api/lectures/${L.id}/export?kind=pdf`);
+    if (!resp.ok) {
+      let msg = `导出失败（HTTP ${resp.status}）`;
+      try {
+        const j = await resp.json();
+        if (j?.error) msg = j.error;
+      } catch {
+        /* 不是 JSON 就用默认文案 */
+      }
+      throw new Error(msg);
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${L.title || 'notes'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // 立刻 revoke 有些浏览器还没开始读，给一秒
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('PDF 已导出（字体已嵌入，手机上也能正常显示）', 'ok');
+  } catch (e) {
+    toast(e.message || '导出 PDF 失败', 'err', 8000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 }
 
 /**

@@ -23,6 +23,9 @@ import { promisify } from 'node:util';
 // 这样「界面里显示的服务商」和「代理真正请求的地址」永远不会各写各的。
 import { PROVIDERS, PRICING_CHECKED_AT, listProviders, getProvider, defaultModel, estimateCost, resolveAsrTarget, selfCheck as checkProviders } from './public/providers.js';
 import { markdownToDocx } from './docx.mjs';
+// PDF 导出：把笔记渲染成独立 HTML，再交给本机浏览器的打印引擎出 PDF。
+// 为什么不自己写 PDF 写入器，见 pdf.mjs 开头的说明（中文字体子集 + 上下标字体回退）。
+import { noteToPdf } from './pdf.mjs';
 // 笔记头部「课程 / 日期 / 时长」的修正逻辑前后端共用一份：
 // 界面上渲染时修一次（旧笔记不用重生成也变正常），导出时再修一次
 // （导出的 Word 直接落盘，不经过界面）。两处若各写一套迟早会走样。
@@ -2315,21 +2318,42 @@ async function handleApi(req, res, u) {
             duration: Number(meta.duration) || 0,
           })
         : '';
+      // 笔记类导出（Word / Markdown / PDF）只导正文，不带 <details> 里那份逐字稿。
+      // 理由：那份附录是给网页端折叠看的（一节 52 分钟的课两万多字），
+      // 导到 Word/PDF 里纸上折叠不了，几十页原文把笔记挤到最后；
+      // 真要逐字稿有单独的 txt / srt 导出，本来就更合适。
+      const noteOnlyMd = fixedMd.replace(/<details[\s\S]*?<\/details>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
       let buf;
       let name = '';
       let contentType = '';
       if (kind === 'docx') {
-        const md = fixedMd;
+        const md = noteOnlyMd;
         if (!md) return fail(res, 404, '还没有可导出的内容');
         buf = markdownToDocx(md, meta.title || '课堂笔记');
         name = `${meta.title || 'notes'}.docx`;
         contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       } else if (kind === 'note') {
-        const text = fixedMd;
+        const text = noteOnlyMd;
         if (!text) return fail(res, 404, '还没有可导出的内容');
         buf = Buffer.from(text, 'utf8');
         name = `${meta.title || 'notes'}.md`;
         contentType = 'text/markdown; charset=utf-8';
+      } else if (kind === 'pdf') {
+        const md = noteOnlyMd;
+        if (!md) return fail(res, 404, '还没有可导出的内容');
+        try {
+          const r = await noteToPdf({
+            markdown: md,
+            title: meta.title || '',
+            meta: { course: meta.course, createdAt: meta.createdAt, duration: Number(meta.duration) || 0 },
+          });
+          buf = r.buf;
+        } catch (e) {
+          // 找不到浏览器之类的问题要说清楚怎么办，别让用户对着「500」猜
+          return fail(res, e.code === 'NO_BROWSER' ? 501 : 502, e.message || String(e));
+        }
+        name = `${meta.title || 'notes'}.pdf`;
+        contentType = 'application/pdf';
       } else if (kind === 'txt') {
         const text = tr.text || tr.segments.map((s) => s.text).join('\n');
         if (!text) return fail(res, 404, '还没有可导出的内容');

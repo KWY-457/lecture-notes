@@ -39,6 +39,7 @@ const FILES = [
   'public/tex.js',
   'public/worker-asr.js',
   'docx.mjs',
+  'pdf.mjs',
   'server.mjs',
 ];
 

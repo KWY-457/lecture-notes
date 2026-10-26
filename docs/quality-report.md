@@ -593,7 +593,7 @@ if (used && used.has(t)) v *= 0.25;   // :539
 
 | 命令 | 结果 | 覆盖什么 |
 | --- | --- | --- |
-| `node --experimental-vm-modules tests/syntax-check.mjs` | 11 文件全过 | 语法解析（`public/*.js` 9 个 + `docx.mjs` + `server.mjs`） |
+| `node --experimental-vm-modules tests/syntax-check.mjs` | 12 文件全过 | 语法解析（`public/*.js` 10 个 + `docx.mjs` + `pdf.mjs` + `server.mjs`） |
 | `node tests/test-denoise.mjs` | **23 / 0** | 抗噪模块：降噪幅度、语音保真、波形不崩、成本 |
 | `node tests/test-pipeline.mjs` | **24 / 0** | 抗噪接进链路：跳过策略、开关、处理顺序、样本数 |
 | `node tests/test-llm-prompt.mjs` | **17 / 0** | AI 笔记提示词：「重点条数」选固定值/自适应都真的进提示词，短课与长课两条路都覆盖（不联网） |
@@ -610,6 +610,7 @@ if (used && used.has(t)) v *= 0.25;   // :539
 | `node tests/test-vram-autofree.mjs` | **27 / 0** | 转写前自动腾显存：停大模型、等显存、转写完拉回来、读不到读数不许卡死、接口挂了不许带崩转写 |
 | `node tests/test-worker-device-fallback.mjs` | **14 / 0** | WebGPU 起不来时的降级：管线只建 2 次、只探 1 次模型源、不假装降级、原文错误要带出来 |
 | `node tests/test-docx.mjs` | **11 / 0** | 导出 Word：zip 结构、标题/列表/表格、XML 转义、`<details>` 附录跳过 |
+| `node tests/test-pdf-export.mjs` | **36 / 0** | 导出 PDF：只导正文、公式渲染成 .tex、`%PDF-` 头、`FontFile2` 子集嵌入（`AAAAAA+` 前缀）、单流不超 8 MB、有文字绘制操作符（不是纯图片）；没装 Chrome/Edge 的机器跳过出 PDF 那几步 |
 | `node tests/probe-worker-progress.mjs` | 全过 | worker 的进度消息：下载中 / 缓存命中（下载回调一条不报）/ 回退 WASM 三种场景，百分比只增不减 |
 | `node tests/dom-app-test.mjs` | **149 / 0** | 跑真的 `public/app.js`：渲染链路 + 服务商切换填地址 + 模型卡片选择器 + 侧栏每行「⋯ 编辑」（改笔记设置，且不会误触发打开录音）+ 教程弹窗 + 清 Key + 笔记按钮改名与自动生成（需真实服务器，见下） |
 | `node tests/api-test.ps1` | **41 / 0** | HTTP 接口：健康检查、转写/笔记/导出 Word（PK 魔数）、配置读写（需真实服务器） |
@@ -683,6 +684,8 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 
 **④ 导出只留 Word。** 原来四个导出按钮（MD/导图/SRT/TXT）下出来的文件老大打不开。现在只剩「导出 Word」+「复制笔记」。新建 `docx.mjs`（零依赖，手写 zip + OOXML，`test-docx` 11/0）：Markdown → .docx，逐字稿附录（`<details>`）不写进 Word；导出处理器默认 `kind=docx`，Content-Type `application/vnd.openxmlformats-officedocument.wordprocessingml.document`。**PDF 这一版不做**：零依赖手写 PDF 太重，LibreOffice 是开发机专属不能随产品发；docx 在 Word/WPS 里打开后可另存 PDF（界面文案已写明）。
 
+> **2026-10-26 补充：PDF 补上了，但不是自己写的 PDF 写入器。** 老大要「导出 PDF」。先试了自己写：撞到两个硬钉子 —— ① 中文 PDF 必须嵌字体，且必须是子集，否则一个文件 13~19 MB；② 更麻烦的是**字体回退**，实测 `simhei.ttf`（中文黑体）**完全没有 Unicode 上下标字符**（`⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻ⁿⁱ` 与 `₀₁₂₃₄₅₆₇₈₉ₐₑₒₓₖₙᵢⱼ` 一个都没有），而 `texToText()` 正是靠这些字符输出 `x²` `xⁿ`；只有 `seguisym` / `segoeui` / `times` 有（`segoeui` 缺 `∈∪`）。自己写就得逐字符挑字体、同时子集化两三个字体。于是换路子：**把笔记渲染成一份独立 HTML，交给本机浏览器的打印引擎**（`chrome --headless --print-to-pdf`）。实测一个 52 分钟的课：**3 页 / 302 KB / 1.9 秒**，PDF 里 7 个字体全部是 `FontFile2` 子集（`AAAAAA+MicrosoftYaHei` 这种前缀），中文、分数、根号、∑∫、`x² xⁿ a₁ aᵢⱼ`、希腊字母在截图里逐项确认过。新增 `pdf.mjs`（`findBrowser()` 按 Chrome → Edge → `LECTURE_BROWSER` 环境变量找，找不到就明确报「装一个 Chrome/Edge」而不是产出一个满屏方框的文件）、`tests/test-pdf-export.mjs` **36 项**。**顺手把导出范围也定了**：笔记类（Word / Markdown / PDF）现在都只导正文，不带 `<details>` 里那份给网页端折叠用的逐字稿附录 —— 老大原话「一般导出不要逐字稿吧，直接导出AI润色部分的就好了」，而且逐字稿有单独的 txt / srt 导出，本来就更合适。`server.mjs` 里统一成 `noteOnlyMd`。
+
 **⑤ 提示词泄漏过滤。** 实锤：模型把提示词里的全角方括号写作要求整段抄进正文（note.json 里「［40 字以内，说清这节课的主线。］」「［这是整份笔记的核心…」）。光靠提示词改不掉（§5.3 坑 1），加代码兜底：`md.js` 新增 `stripPromptLeaks(md)` 把「［…］」整段（可跨行）删掉；渲染入口 + 生成保存前各过滤一次（`llm.js` 的 `linkifyTimestamps(stripPromptLeaks(markdown))`）。老笔记不改文件也能显示干净。
 
 ---
@@ -721,7 +724,7 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 
 ### 14.4 离「完整发售」还差什么（2026-10-20 盘点）
 
-**已经齐了**：程序本体（35 项测试：34 通过 + 1 跳过，约 335 秒跑完）、安装包（Inno 6.7.3 打的，25.8 MB）、用户协议与隐私政策（19 项测试）、打赏入口（手机端实测修过遮挡）、换盘能力、质量回归基线（6 条录音、48 项断言）、服务商收成四家且模型跟服务商绑定（62 项断言 + 老配置迁移 41 项断言）、每条录音自己的笔记风格与提示词（含 AI 笔记的「重点条数」真的写进提示词，17 项断言）、数学公式能渲染成真正的分数和上下标（HTML 与 Word 两条路，44 项断言），而且分数中心贴着数学轴、根号不沉底、括号跟着内容长高（16 项断言）。
+**已经齐了**：程序本体（36 项测试：35 通过 + 1 跳过，约 370 秒跑完）、安装包（Inno 6.7.3 打的，25.8 MB）、用户协议与隐私政策（19 项测试）、打赏入口（手机端实测修过遮挡）、换盘能力、质量回归基线（6 条录音、48 项断言）、服务商收成四家且模型跟服务商绑定（62 项断言 + 老配置迁移 41 项断言）、每条录音自己的笔记风格与提示词（含 AI 笔记的「重点条数」真的写进提示词，17 项断言）、数学公式能渲染成真正的分数和上下标（HTML 与 Word 两条路，44 项断言），而且分数中心贴着数学轴、根号不沉底、括号跟着内容长高（16 项断言）、**PDF 导出**（走本机浏览器的打印引擎，中文字体子集嵌入，52 分钟的课约 3 页 300 KB；笔记类导出只带正文，不含折叠用的逐字稿附录，36 项断言）。
 
 **还差的是「卖」这一侧的事，不是代码**：
 

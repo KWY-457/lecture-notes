@@ -56,6 +56,7 @@ const OFFLINE = [
   ['test-mindmap-labels.mjs', '思维导图标签：强信号优先、泛词不要、抽不出就空着'],
   ['test-tex.mjs', 'LaTeX 公式渲染：分数/上下标/希腊字母/极端输入不崩'],
   ['test-tex-style.mjs', 'LaTeX 对齐：分数贴数学轴、根号不沉底、括号跟着长高'],
+  ['test-pdf-export.mjs', 'PDF 导出：只导正文、公式不裸奔、字体真的嵌进去（没装浏览器会跳过出 PDF 那几步）'],
   ['test-providers.mjs', '各家转写/大模型服务商的参数拼装'],
   ['test-worker-device-fallback.mjs', '显卡不可用时的回退'],
   ['test-vram-autofree.mjs', '转写前自动腾显存'],
