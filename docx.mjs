@@ -7,7 +7,13 @@
  * 只支持本应用笔记用到的 Markdown 子集：
  * 标题、无序/有序列表、引用、分隔线、表格、粗体、行内代码、链接与时间戳。
  * 时间戳链接 [12:34](#t=754) 在 Word 里会落成纯文本 [12:34]。
+ *
+ * 公式（`\( \frac{d^2y}{dx^2} \)` 这类）会先用 public/tex.js 的 texToText()
+ * 转成可读的 Unicode 文本再排（`(d²y)/(dx²)`）。Word 的 OMML 真公式语法
+ * 比整个 docx 生成器还长，为一份笔记引入它不值得；宁可给一个能看懂的近似。
  */
+
+import { texToText } from './public/tex.js';
 import zlib from 'node:zlib';
 
 /* ---------- zip 打包（deflate + UTF-8 文件名） ---------- */
@@ -84,15 +90,65 @@ const xmlEsc = (s) =>
 const FONT = '<w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="微软雅黑"/>';
 const H_SZ = { 1: 32, 2: 28, 3: 26, 4: 24, 5: 22, 6: 22 }; // 单位是半磅：16pt → 32
 
-/** 行内解析：**粗体**、`代码`、[文字](#t=秒) 时间戳、[文字](url) 链接 */
+/**
+ * 把「跨行的显示公式」并回一行（原地改数组）。
+ *
+ * 模型写显示公式时经常拆成三行：
+ * ```
+ *   \[
+ *   (uv)^{(n)} = \sum_{k=0}^n \binom{n}{k} u^{(n-k)} v^{(k)}.
+ *   \]
+ * ```
+ * `markdownToDocx` 是逐行处理的，单看每一行都没有成对定界符，
+ * `flattenTex` 匹配不上，`\sum` `\binom` 就原样进了 Word。
+ * 这里先把这种三行并成 `\[ … \]` 一行，后面的逐行逻辑才认得出。
+ *
+ * 只并「整行只有定界符」或「以定界符开头、本行就能闭合」的情形 ——
+ * 正文中间偶然出现的 `\[` 不该被当成公式开头乱并。
+ */
+function collapseDisplayMath(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim();
+    if (raw !== '\\[') continue;
+    // 往下找整行只有 \] 的收尾行
+    let end = -1;
+    for (let j = i + 1; j < lines.length && j - i <= 40; j++) {
+      if (lines[j].trim() === '\\]') {
+        end = j;
+        break;
+      }
+    }
+    if (end < 0) continue;
+    const bodyText = lines.slice(i + 1, end).map((l) => l.trim()).join(' ');
+    lines.splice(i, end - i + 1, '\\[' + bodyText + '\\]');
+  }
+}
+
+/**
+ * 把 `\( ... \)` / `$...$` / `\[ ... \]` 公式替换成可读纯文本。
+ * 必须在 inlineRuns 之前做 —— 否则 `\frac{d^2y}{dx^2}` 里的 `^` `_` `{}` 会原样出现在 Word 里。
+ */
+function flattenTex(text) {
+  const src = String(text ?? '');
+  const TEX_RE = /\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
+  return src.replace(TEX_RE, (m, a, b, c, d) => {
+    const body = a ?? b ?? c ?? d ?? '';
+    // 单 $ 的写法要排除「$5 块钱」这种货币用法
+    if (d !== undefined && !/[\\^_{}]/.test(body)) return m;
+    return texToText(body);
+  });
+}
+
+/** 行内解析：**粗体**、`代码`、[文字](#t=秒) 时间戳、[文字](url) 链接、LaTeX 公式 */
 function inlineRuns(text) {
+  const flat = flattenTex(text);
   const runs = [];
   const re = /(\*\*[^*]+\*\*)|(`[^`]+`)|(\[[^\]]*\]\([^)]*\))/g;
   let last = 0;
   let m;
   const push = (t, bold = false, code = false) => runs.push({ t, bold, code });
-  while ((m = re.exec(text))) {
-    if (m.index > last) push(text.slice(last, m.index));
+  while ((m = re.exec(flat))) {
+    if (m.index > last) push(flat.slice(last, m.index));
     if (m[1]) push(m[1].slice(2, -2), true);
     else if (m[2]) push(m[2].slice(1, -1), false, true);
     else if (m[3]) {
@@ -101,7 +157,7 @@ function inlineRuns(text) {
     }
     last = m.index + m[0].length;
   }
-  if (last < text.length) push(text.slice(last));
+  if (last < flat.length) push(flat.slice(last));
   return runs;
 }
 
@@ -167,6 +223,11 @@ function cellsOf(line) {
  */
 export function markdownToDocx(md, title = '课堂笔记') {
   const lines = String(md || '').replace(/\r/g, '').split('\n');
+  // 先把「跨行的显示公式」并成一行：模型经常把 \[ … \] 拆成三行写
+  // （`\[` 一行、公式主体一行、`\]` 一行）。按行处理时这三行各自
+  // 都匹配不上成对定界符，flattenTex 就没机会把它换成纯文本，
+  // 到了 Word 里就成了裸的 `\sum \binom{…}`（实测高数那篇就是这样）。
+  collapseDisplayMath(lines);
   const body = [];
   let i = 0;
   let inDetails = false;

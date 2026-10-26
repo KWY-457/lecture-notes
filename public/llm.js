@@ -798,9 +798,14 @@ function stripForCheck(md) {
   return String(md || '')
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/<details[\s\S]*?<\/details>/gi, ' ')
-    // 公式（$…$ / $$…$$）整段去掉：语音转写里根本不会出现符号和公式外形，
+    // 公式整段去掉：语音转写里根本不会出现符号和公式外形，
     // 拿 LaTeX 里的 \frac、\lim 去对逐字稿，每一条都是误报。
+    // 四种定界符都要覆盖 —— 只删 $…$ 会漏掉 \( … \) / \[ … \]，
+    // 那样 `\frac`、`\left`、`\sqrt` 会被当成英文单词拿去对逐字稿
+    // （实测高数那篇就是这样报出「frac 逐字稿里没有这个数」）。
     .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/\\\[[\s\S]*?\\\]/g, ' ')
+    .replace(/\\\([\s\S]*?\\\)/g, ' ')
     .replace(/\$[^$\n]*\$/g, ' ')
     // 「- ⚠ …」是上一次生成时我们自己写进去的警告，里面全是数字和人名。
     // 不删掉就会自己查自己：警告里提到「4 篇」，下一次生成又因为这条警告报一次。
@@ -1066,7 +1071,16 @@ export function alignByCore(body, d) {
 function noteContext(md, span, n = 18) {
   const i = md.indexOf(span);
   if (i < 0) return '';
-  return md.slice(Math.max(0, i - n), i + span.length + n).replace(/\s+/g, ' ').trim();
+  return (
+    md
+      .slice(Math.max(0, i - n), i + span.length + n)
+      .replace(/\s+/g, ' ')
+      // 上下文里的公式换成「公式」两个字：这段话最终会进「- ⚠ …」警告行，
+      // 而警告行是当正文渲染的。留半个 `\(` 没有配对的 `\)`，
+      // 渲染时就会跨过「」一直吞到下一个公式的结尾（实测高数那篇吞掉了两行）。
+      .replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*\$/g, '公式')
+      .trim()
+  );
 }
 
 /**

@@ -598,6 +598,7 @@ if (used && used.has(t)) v *= 0.25;   // :539
 | `node tests/test-pipeline.mjs` | **24 / 0** | 抗噪接进链路：跳过策略、开关、处理顺序、样本数 |
 | `node tests/test-llm-prompt.mjs` | **17 / 0** | AI 笔记提示词：「重点条数」选固定值/自适应都真的进提示词，短课与长课两条路都覆盖（不联网） |
 | `node tests/test-mindmap-labels.mjs` | **19 / 0** | 思维导图标签：加粗/冒号/实体名优先，泛词与序数不要，跨主题去重，抽不出就空着（不联网） |
+| `node tests/test-tex.mjs` | **44 / 0** | LaTeX 公式渲染：分数/上下标/根号/希腊字母/函数名正体/未识别命令不白屏/纯文本导出不带反斜杠，含 10 项极端输入不崩（不联网） |
 | `node tests/test-cleanup.mjs` | **67 / 0** | 繁简换代、白名单清洗、长度守恒、幻觉评分 |
 | `node tests/test-proofread-robust.mjs` | **37 / 0** | 大模型校对降级链路（六种坏输出） |
 | `node tests/test-proofread-llm.mjs` | **4 / 0** | 真调本地 llama-server 校对：音近错字批量改正（需 8080 大模型在跑） |
@@ -675,6 +676,8 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 
 **② 课程定位删掉。** 老大原话：「课程定位功能目前就是个摆设，去掉」。删了界面按钮 `#btn-course`、`doCourseDetect()`（`app.js`）与 `detectCourse()`（`llm.js`）。课程字段本身保留（可以手填）。
 
+> **2026-10-26 补充：公式不再是红叉。** 老大发来一张高数笔记截图，满屏 `y′′ = \frac{d^2y}{dx^2}`、`\sqrt{1+x}` 原样裸露（模型确实按提示词写了 LaTeX，但前端没有任何渲染）。现在新增 `public/tex.js`（零依赖，约 340 行）：`renderTex()` 输出 HTML（分数用 flex 上下叠、上下标优先用 Unicode 上标字符 `²⁰¹⁴⁵⁶⁷⁸⁹⁺⁻ⁿⁱ`、根号加顶线、`\sin` `\ln` `\lim` 这些函数名保持正体、`\left( \right)` 自动长高的括号、∑∫ 放大显示），`texToText()` 输出纯文本给 Word 导出用（`\frac{a}{b}` → `(a)/(b)`，`u^{(n)}` → `u⁽ⁿ⁾`，绝不把反斜杠带进 Word）。`md.js` 的 `TEX_RE` 认四种定界符（`\(…\)` / `\[…\]` / `$$…$$` / `$…$`），公式必须在 HTML 转义**之前**切出来，否则 `\text{a<b}` 会被双重转义。`docx.mjs` 另外加了 `collapseDisplayMath()` —— 模型常把 `\[ … \]` 拆成三行写，逐行处理的导出器匹配不上成对定界符，`\sum \binom` 就会裸着进 Word。三个连带修掉的真 bug：① `llm.js` 的 `stripForCheck()` 只删了 `$…$` 公式，没删 `\(…\)`，导致 `\frac` `\left` `\sqrt` 被当成英文单词拿去对逐字稿，每次生成都报「frac 逐字稿里没有这个数」这种假警报；② 同一处 `noteContext()` 把半个 `\(` 抄进「- ⚠ …」警告行，渲染时跨过引号一直吞到下一个公式结尾，把两行正文吃掉了；③ `texToText()` 的上下标拼不出 Unicode 字符时产出 `u^((n-k))` 这种双括号（现已识别「本身已带括号」不再套第二层）。新增 `tests/test-tex.mjs` **44 项**（含 10 项「极端输入不崩」：单个 `{`、半个 `\frac{`、`^^^`、`___`），登记进 `run-all.mjs`；`syntax-check.mjs` 的 FILES 补 `public/tex.js`。
+
 **③ 显卡自检按钮删掉。** 老大原话：「点了没反应…没啥用去掉」。删除 `#btn-gpu-check` 与其绑定；`checkGpu()` 与 `runDiagnostics()` 保留在 设置→⑥环境自检（`requestAdapter` 真检测逻辑原样保留，见 §7.7）。
 
 **④ 导出只留 Word。** 原来四个导出按钮（MD/导图/SRT/TXT）下出来的文件老大打不开。现在只剩「导出 Word」+「复制笔记」。新建 `docx.mjs`（零依赖，手写 zip + OOXML，`test-docx` 11/0）：Markdown → .docx，逐字稿附录（`<details>`）不写进 Word；导出处理器默认 `kind=docx`，Content-Type `application/vnd.openxmlformats-officedocument.wordprocessingml.document`。**PDF 这一版不做**：零依赖手写 PDF 太重，LibreOffice 是开发机专属不能随产品发；docx 在 Word/WPS 里打开后可另存 PDF（界面文案已写明）。
@@ -717,7 +720,7 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 
 ### 14.4 离「完整发售」还差什么（2026-10-20 盘点）
 
-**已经齐了**：程序本体（33 项测试全绿，约 305 秒跑完）、安装包（Inno 6.7.3 打的，25.8 MB）、用户协议与隐私政策（19 项测试）、打赏入口（手机端实测修过遮挡）、换盘能力、质量回归基线（6 条录音、48 项断言）、服务商收成四家且模型跟服务商绑定（62 项断言 + 老配置迁移 41 项断言）、每条录音自己的笔记风格与提示词（含 AI 笔记的「重点条数」真的写进提示词，17 项断言）。
+**已经齐了**：程序本体（34 项测试全绿，约 305 秒跑完）、安装包（Inno 6.7.3 打的，25.8 MB）、用户协议与隐私政策（19 项测试）、打赏入口（手机端实测修过遮挡）、换盘能力、质量回归基线（6 条录音、48 项断言）、服务商收成四家且模型跟服务商绑定（62 项断言 + 老配置迁移 41 项断言）、每条录音自己的笔记风格与提示词（含 AI 笔记的「重点条数」真的写进提示词，17 项断言）、数学公式能渲染成真正的分数和上下标（HTML 与 Word 两条路，44 项断言）。
 
 **还差的是「卖」这一侧的事，不是代码**：
 

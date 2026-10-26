@@ -302,6 +302,39 @@ a { color: var(--brand); }
 .markdown th, .markdown td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
 .markdown th { background: var(--panel-2); }
 .markdown summary { cursor: pointer; color: var(--brand); font-weight: 600; }
+
+/* ── LaTeX 公式（public/tex.js 输出的 HTML）────────────────────────────────
+   全部用 inline-flex 拼，不依赖任何字体外挂：分数是上下两行 + 中间一条线，
+   上下标优先用 Unicode 字符（紧凑），字符不在表里才退回 <sup>/<sub>。
+   行高收紧一点，否则带分数的行会把整段笔记撑得很稀。 */
+.tex { font-family: 'Cambria Math', 'Latin Modern Math', 'Times New Roman', serif; font-style: italic; white-space: nowrap; }
+.tex-display { display: block; text-align: center; font-size: 1.12em; margin: 8px 0; white-space: normal; }
+/* 数字和运算符不该斜体，正体才符合数学排版惯例 */
+.tex .tex-fn, .tex .tex-rm, .tex .tex-sym, .tex .tex-bigop, .tex .tex-delim, .tex .tex-greek, .tex .tex-sqrt { font-style: normal; }
+.tex-greek { font-style: italic; }
+.tex-fn { font-style: normal; padding-right: .18em; }
+.tex-rm { font-style: normal; }
+.tex-bold { font-weight: 700; }
+.tex-prime { font-style: normal; }
+.tex-sym { padding: 0 .12em; }
+.tex-bigop { font-size: 1.35em; line-height: 1; vertical-align: -.12em; font-style: normal; }
+.tex-sup, .tex-sub { font-size: .78em; }
+.tex-frac {
+  display: inline-flex; flex-direction: column; align-items: center;
+  vertical-align: -.46em; margin: 0 .18em; line-height: 1.16; font-size: .96em;
+}
+.tex-frac .tex-num { padding: 0 .22em; }
+.tex-frac .tex-den { padding: 0 .22em; border-top: 1px solid currentColor; }
+.tex-frac-nobar .tex-den { border-top: 0; padding-top: 1px; }
+.tex-sqrt { display: inline-flex; align-items: flex-start; font-style: normal; }
+.tex-sqrt .tex-idx { font-size: .64em; margin-right: -2px; margin-top: -.1em; }
+.tex-sqrt .tex-radical { line-height: 1.1; }
+.tex-sqrt .tex-radicand { border-top: 1px solid currentColor; padding: .05em .12em 0; margin-left: -1px; }
+.tex-bin { display: inline-flex; align-items: center; }
+.tex-bin .tex-delim { font-size: 1.5em; line-height: 1; font-weight: 300; }
+.tex-delim { font-style: normal; }
+.tex-unknown { font-style: normal; color: var(--danger); }
+.tex-raw { font-family: var(--mono); font-size: .92em; color: var(--muted); }
 .markdown a.ts {
   font-family: var(--mono); font-size: 12px; text-decoration: none;
   background: var(--brand-soft); color: var(--brand); padding: 1px 6px; border-radius: 6px;

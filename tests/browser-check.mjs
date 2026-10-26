@@ -195,7 +195,11 @@ check('首页无控制台报错', consoleErrors.length === 0, consoleErrors.join
 /* ------------------------- 2. 详情页 ------------------------- */
 console.log('\n--- 2. 详情页（笔记 + 逐字稿 + 播放器）---');
 const lectures = await fetch(APP + '/api/lectures').then((r) => r.json());
-const lec = lectures.lectures[0];
+// 不能直接取 [0]：列表按置顶优先 + 时间倒序排，用户把自己的课置顶（或新导入一条）
+// 就会顶掉示例课，后面「标题渲染 → 含二叉树」「课程字段 → 数据结构」整段全红，
+// 而我这边看着像是自己改坏了（2026-10-26 就这样误判过一次）。
+// 按标题精确挑示例课，找不到再退回第一条。
+const lec = lectures.lectures.find((l) => /二叉树/.test(l.title || '')) || lectures.lectures[0];
 check('后端有示例课', !!lec, JSON.stringify(lectures).slice(0, 120));
 
 await open(`${APP}/#/l/${lec.id}`, { width: 1500, height: 1600, settle: 3000 });

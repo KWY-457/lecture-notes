@@ -36,6 +36,7 @@ const FILES = [
   'public/t2s-table.js',
   'public/transcript.js',
   'public/note.js',
+  'public/tex.js',
   'public/worker-asr.js',
   'docx.mjs',
   'server.mjs',

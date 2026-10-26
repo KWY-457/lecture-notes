@@ -1,8 +1,13 @@
 /**
  * 极简 Markdown 渲染器（零依赖）
  * 只支持我们生成笔记时用到的语法子集，但做了完整转义，避免 XSS。
- * 额外支持：时间戳链接 [12:34](#t=754) 会被标记成可点击的跳转锚点。
+ * 额外支持：
+ *   - 时间戳链接 [12:34](#t=754) 会被标记成可点击的跳转锚点
+ *   - LaTeX 公式：行内 `\( ... \)`、`$...$`，独立 `\[ ... \]`、`$$...$$`
+ *     （交给 public/tex.js，见那里的设计说明）
  */
+
+import { renderTex, hasTex } from './tex.js';
 
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -20,7 +25,18 @@ export function stripPromptLeaks(md) {
   return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function inline(text) {
+/**
+ * 公式定界符。四种写法都认：
+ *   `\( ... \)` 行内   `\[ ... \]` 独立   `$$ ... $$` 独立   `$ ... $` 行内
+ * `$...$` 排在最后，`$$` 才不会被它先吃掉。
+ */
+const TEX_RE = /\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
+
+/** `$5 块钱` 这种不能当公式。只认带反斜杠命令或上下标/花括号的 */
+const looksMath = (s) => /[\\^_{}]/.test(s);
+
+/** 不含公式的纯文本行内处理（原来的逻辑，原样搬过来） */
+function inlinePlain(text) {
   let s = esc(text);
   // 行内代码
   s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
@@ -37,6 +53,30 @@ function inline(text) {
     return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
   return s;
+}
+
+function inline(text) {
+  const src = String(text ?? '');
+  if (!hasTex(src) && !src.includes('$')) return inlinePlain(src);
+
+  // 公式必须在 **转义之前** 切出来：esc() 会把 `\text{a<b}` 里的 < 变成 &lt;，
+  // 再交给 tex.js 就变成双重转义，页面上显示 &lt;
+  let out = '';
+  let last = 0;
+  TEX_RE.lastIndex = 0;
+  let m;
+  while ((m = TEX_RE.exec(src))) {
+    const body = m[1] ?? m[2] ?? m[3] ?? m[4] ?? '';
+    const display = m[2] !== undefined || m[3] !== undefined;
+    // 第四种（单 $）要先排除货币写法，否则「$5 和 $6」之间那段会被当公式
+    if (m[4] !== undefined && !looksMath(body)) continue;
+    if (m.index > last) out += inlinePlain(src.slice(last, m.index));
+    out += renderTex(body, { display });
+    last = m.index + m[0].length;
+  }
+  if (last === 0) return inlinePlain(src); // 一个公式都没匹配上
+  if (last < src.length) out += inlinePlain(src.slice(last));
+  return out;
 }
 
 export function renderMarkdown(src) {
