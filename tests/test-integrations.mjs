@@ -50,7 +50,7 @@ const fake = http.createServer((req, res) => {
     if (req.url.includes('/chat/completions')) {
       let payload = {};
       try { payload = JSON.parse(raw.toString('utf8')); } catch {}
-      seen.chat.push({ auth, model: payload.model, messages: payload.messages?.length || 0, promptLen: (payload.messages || []).map((m) => m.content || '').join('').length });
+      seen.chat.push({ auth, model: payload.model, messages: payload.messages?.length || 0, promptLen: (payload.messages || []).map((m) => m.content || '').join('').length, reasoningEffort: payload.reasoning_effort });
       const content = [
         '# 测试课笔记（假模型）',
         '',
@@ -185,6 +185,26 @@ check('长逐字稿走分段汇总', calls >= 3, `调用了 ${calls} 次`);
 check('分段数 = 模型调用数 - 1（减掉汇总那次）', out2.steps === calls, `steps=${out2.steps} calls=${calls}`);
 check('长逐字稿产出笔记', out2.markdown.includes('课堂脉络与重点'), out2.markdown.slice(0, 120));
 check('模型收到 system + user 两条消息', seen.chat.at(-1).messages === 2, JSON.stringify(seen.chat.at(-1)));
+
+/* ------------------ 3.5 思考型模型自动压推理 ------------------
+   providers.js 里标了 thinking:true 的模型（GLM-5.3-Flash），服务端必须自动带
+   reasoning_effort:'low'。不带的话它要想几百字，一份长逐字稿要跑 800 秒，
+   而 Node 内置 fetch 有 300 秒 headersTimeout 硬墙 —— 用户界面只会看到
+   「LLM 请求失败: Headers Timeout Error」，以为模型坏了（2026-10-28 实测）。
+   不思考的模型（Qwen2.5 / DeepSeek）**不能**带这个参数，否则等于白改行为。 */
+console.log('\n--- 3.5 思考型模型自动带上 reasoning_effort ---');
+// 这一段的 config.llm.provider 还是上一段写进去的值（为了走假供应商，baseUrl 指向 FAKE）。
+// modelSpec() 是按 provider 查表的，所以先把 provider 设成 siliconflow —— 否则注册表里
+// 查不到 zai-org/GLM-5.3-Flash，thinkingHint() 会老老实实不加参数，断言就成假绿了。
+await j('/api/config', { method: 'PUT', body: { llm: { provider: 'siliconflow' } } });
+const glm = await j('/api/llm', { method: 'POST', body: { model: 'zai-org/GLM-5.3-Flash', messages: [{ role: 'user', content: '说一个字' }] } });
+check('GLM-5.3-Flash 能调通', glm.ok === true, JSON.stringify(glm).slice(0, 200));
+check('GLM（thinking 模型）自动带 reasoning_effort:low', seen.chat.at(-1).reasoningEffort === 'low', JSON.stringify(seen.chat.at(-1)).slice(0, 300));
+const plain = await j('/api/llm', { method: 'POST', body: { model: 'Qwen/Qwen2.5-7B-Instruct', messages: [{ role: 'user', content: '说一个字' }] } });
+check('Qwen2.5-7B 能调通', plain.ok === true, JSON.stringify(plain).slice(0, 200));
+check('不思考的模型不带 reasoning_effort', seen.chat.at(-1).reasoningEffort === undefined, JSON.stringify(seen.chat.at(-1)).slice(0, 300));
+await j('/api/llm', { method: 'POST', body: { model: 'some-unknown-model-x', messages: [{ role: 'user', content: '说一个字' }] } });
+check('没登记过的模型名不带 reasoning_effort（不瞎猜）', seen.chat.at(-1).reasoningEffort === undefined, JSON.stringify(seen.chat.at(-1)).slice(0, 300));
 
 /* ------------------ 4. 大模型连通性测试接口 ------------------ */
 const t = await j('/api/llm/test', { method: 'POST', body: {} });

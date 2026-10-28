@@ -21,7 +21,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 // 云端服务商注册表：前端 public/providers.js 用的是同一个文件，
 // 这样「界面里显示的服务商」和「代理真正请求的地址」永远不会各写各的。
-import { PROVIDERS, PRICING_CHECKED_AT, listProviders, getProvider, defaultModel, estimateCost, resolveAsrTarget, selfCheck as checkProviders } from './public/providers.js';
+import { PROVIDERS, PRICING_CHECKED_AT, listProviders, getProvider, defaultModel, estimateCost, resolveAsrTarget, modelSpec, selfCheck as checkProviders } from './public/providers.js';
 import { markdownToDocx } from './docx.mjs';
 // PDF 导出：把笔记渲染成独立 HTML，再交给本机浏览器的打印引擎出 PDF。
 // 为什么不自己写 PDF 写入器，见 pdf.mjs 开头的说明（中文字体子集 + 上下标字体回退）。
@@ -1174,6 +1174,33 @@ function fmtSize(bytes) {
   if (n >= 1024 * 1024 * 1024) return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
   return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
+
+/* ------------------------------ 思考型模型 ------------------------------ */
+/**
+ * thinking: true 的模型（providers.js 里标的）要先想几百字才出正文，
+ * 服务端拿不到「响应头」之前只能干等 —— 而 Node 内置 fetch（undici）
+ * 有一条 300 秒的 headersTimeout 硬墙，比项目自己配的 llm.timeoutMs 更早触发。
+ *
+ * 2026-10-28 实测 GLM-5.3-Flash 整理 21316 字逐字稿：
+ *   不加参数   → 810~822 秒（思考 50157 字），**必然撞 300 秒墙 → 界面只看到
+ *                「LLM 请求失败: Headers Timeout Error」，用户以为模型挂了**；
+ *   reasoning_effort:'low' → 160 秒，思考 0 字，产出 6995 字 / 69 条要点 /
+ *                21 个标题（对照 69 条 / 22 个标题，质量没掉）。
+ *
+ * 试过但**无效**的六种写法（都在 _scratch/probe-glm-thinking.mjs 里验过，
+ * 小输入 8.7 秒基线、思考 1182 字，六种全都没把思考压下去）：
+ *   enable_thinking:false / thinking:{type:'disabled'} / reasoning_effort:'none' /
+ *   chat_template_kwargs:{enable_thinking:false} / thinking_budget:0（直接 400）/
+ *   以及 reasoning_effort:'minimal'（被忽略，退化成默认思考，900 秒都没回来）。
+ * 只有 'low' 真生效 —— 所以别「优化」成别的值。
+ */
+function thinkingHint(model) {
+  const spec = modelSpec(config.llm.provider, 'llm', model);
+  // 自定义服务商没有注册表条目（modelSpec 返回 null）—— 不猜，不加参数。
+  if (!spec || spec.thinking !== true) return {};
+  return { reasoning_effort: 'low' };
+}
+
 
 async function transcribeViaApi(id, meta, opts = {}) {
   // 决定往哪发、用哪个模型、要不要 verbose_json —— 逻辑在 public/providers.js
@@ -2415,6 +2442,8 @@ async function handleApi(req, res, u) {
           // 不传 max_tokens 时用服务端默认值；llama-server 默认 -n_predict 512，
           // 会把输出硬截断成半截 JSON —— 所以"要求逐条回抄原文"的任务必须显式给足配额
           ...(body.max_tokens ? { max_tokens: Number(body.max_tokens) } : {}),
+          // 思考型模型压住推理，否则请求会撞 fetch 的 300 秒 headersTimeout（见 thinkingHint）
+          ...thinkingHint(model),
         }),
         signal: ac.signal,
       });
@@ -2449,7 +2478,7 @@ async function handleApi(req, res, u) {
       const resp = await fetch(baseUrl + '/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: 'Bearer ' + apiKey } : {}) },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: '回复两个字：可用' }], max_tokens: 16 }),
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: '回复两个字：可用' }], max_tokens: 16, ...thinkingHint(model) }),
         signal: ac.signal,
       });
       clearTimeout(timer);

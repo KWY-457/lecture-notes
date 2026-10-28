@@ -316,9 +316,32 @@ Error: 大模型校对输出不是合法 JSON，请重试
 
 ### 6.4 验证
 
-`tests/test-providers.mjs` **62/0**（注册表与目标解析的纯逻辑，含「模型不会串台」和「卡片副标题不带括号」两条）、`tests/test-provider-migration.mjs` **41/0**（老配置自动迁移：收掉的服务商并进 custom / local、Key 和自填项不动、幂等）、`tests/test-cloud-e2e.mjs` **29/0**（真的起一个服务，走 HTTP 验配置读写、Key 保护、`checkOnly` 配置自检不会真发请求）、`tests/dom-app-test.mjs` **149/0**（跑真的 `public/app.js`，验下拉切换会填地址、模型卡片选择器、侧栏每行的「⋯ 编辑」入口带当前笔记设置、教程弹窗能出正文、清 Key 按钮真的发请求、**「重新生成笔记」/「AI 润色」两个按钮的文字与「转写后自动生成笔记」那条代码路径**）。
+`tests/test-providers.mjs` **66/0**（注册表与目标解析的纯逻辑，含「模型不会串台」「卡片副标题不带括号」「思考型模型标了 thinking」三组）、`tests/test-provider-migration.mjs` **41/0**（老配置自动迁移：收掉的服务商并进 custom / local、Key 和自填项不动、幂等）、`tests/test-cloud-e2e.mjs` **29/0**（真的起一个服务，走 HTTP 验配置读写、Key 保护、`checkOnly` 配置自检不会真发请求）、`tests/dom-app-test.mjs` **149/0**（跑真的 `public/app.js`，验下拉切换会填地址、模型卡片选择器、侧栏每行的「⋯ 编辑」入口带当前笔记设置、教程弹窗能出正文、清 Key 按钮真的发请求、**「重新生成笔记」/「AI 润色」两个按钮的文字与「转写后自动生成笔记」那条代码路径**）。
 
 `checkOnly` 值得单说：上传一小时的录音之前，可以先让服务端**只检查配置、不发请求**，把「地址没填 / Key 没填 / 模型名不对」在花钱之前就告诉你。
+
+### 6.5 思考型模型：为什么 GLM-5.3-Flash 的「AI 润色」一定失败（2026-10-28）
+
+老大报「AI润色我用GLM 5.3flsh 模型好像一直失败，其他模型测试正常」。查下来不是一个 bug，是两堵墙叠在一起。
+
+**墙一：模型自己在想。** GLM-5.3-Flash 是思考型，出正文前先生成几百字推理。同一份 21316 字逐字稿实测（`_scratch/probe-glm-effort.mjs`，直连硅基流动）：
+
+| 参数 | 耗时 | 正文 | 思考 | completion tokens |
+| --- | --- | --- | --- | --- |
+| 不加 | 810.8 秒 | 6096 字 | 53606 字 | 34347（思考 29977） |
+| `reasoning_effort:'medium'` | 822.6 秒 | 8233 字 | 50157 字 | 35612（思考 29870） |
+| **`reasoning_effort:'low'`** | **160.7 秒** | **6995 字** | **0 字** | **4922（思考 0）** |
+| `reasoning_effort:'minimal'` | 900 秒本机超时 | — | — | — |
+
+**墙二：Node 内置 fetch 有 300 秒 headersTimeout 硬墙**，比项目自己配的 `llm.timeoutMs = 420000` 更早触发。于是 810 秒那次请求在 300 秒被 undici 掐掉，服务端 `catch` 到 `Headers Timeout Error`，界面只显示「LLM 请求失败: Headers Timeout Error」。用户看到的「一直失败」，实际是**每次都在 300 秒整整齐齐地断**。用 curl（没有 300 秒限制）打同一个 `/api/llm` 复现：HTTP 502 / 304 秒 / `{"ok":false,"error":"LLM 请求失败: Headers Timeout Error"}`。
+
+**试过但无效的六种「关思考」写法**（小输入 8.7 秒基线 / 思考 1182 字，`_scratch/probe-glm-thinking.mjs`）：`enable_thinking:false`（思考 1060 字）、`thinking:{type:'disabled'}`（1031 字）、`reasoning_effort:'none'`（1219 字）、`chat_template_kwargs:{enable_thinking:false}`（1065 字）、`thinking_budget:0`（直接 HTTP 400，`{"code":20015,"message":"Value error, thinking_budget must be greater than 0."}`）、`reasoning_effort:'minimal'`（被忽略，大输入上 900 秒都没回来）。**只有 `low` 真生效**，所以 `providers.js` 里那段注释特意写了「别『优化』成别的值」。
+
+**修法**：`public/providers.js` 给 GLM 加 `thinking: true`；`server.mjs` 新增 `thinkingHint(model)`，用 `modelSpec(config.llm.provider, 'llm', model)` 反查，`spec.thinking === true` 才回 `{ reasoning_effort: 'low' }`，`/llm` 与 `/llm/test` 两个分支都带上。**没登记的模型名（自定义服务商）一律不加** —— 不知道对方的边界，不猜。
+
+**实测改善**：同一条 `1305e386` 走完整的 `generateAINote`（分块 + 汇总 + 核对），修之前 **303.7 秒 → `fetch failed`**，修之后 **122.4 秒 → 成功**（5 次模型调用，第一次 114 秒）。
+
+**`stream: true` 也试过，否决**：`_scratch/probe-glm-fix.mjs` 里在 420 秒上限下报 `AbortError`，而且 `server.mjs` 现在是非流式聚合，改流式要动整条渲染链。
 
 ---
 
@@ -603,7 +626,7 @@ if (used && used.has(t)) v *= 0.25;   // :539
 | `node tests/test-cleanup.mjs` | **67 / 0** | 繁简换代、白名单清洗、长度守恒、幻觉评分 |
 | `node tests/test-proofread-robust.mjs` | **37 / 0** | 大模型校对降级链路（六种坏输出） |
 | `node tests/test-proofread-llm.mjs` | **4 / 0** | 真调本地 llama-server 校对：音近错字批量改正（需 8080 大模型在跑） |
-| `node tests/test-providers.mjs` | **62 / 0** | 云端服务商注册表与「服务商 → 实际请求目标」的解析；模型跟服务商绑定，不串台 |
+| `node tests/test-providers.mjs` | **66 / 0** | 云端服务商注册表与「服务商 → 实际请求目标」的解析；模型跟服务商绑定，不串台；思考型模型（GLM-5.3-Flash）标了 `thinking:true`，不思考的模型没有 |
 | `node tests/test-provider-migration.mjs` | **41 / 0** | 老配置迁移：收掉的服务商并进 custom / local，Key 与用户自填的地址模型都不动 |
 | `node tests/test-lan.mjs` | **25 / 0** | 手机访问开关：默认关、关着时局域网 403（带正确密钥也进不来）、开了放行、关掉立刻失效、外机关不了开关、只绑本机时开不了（409） |
 | `node tests/test-cloud-e2e.mjs` | **29 / 0** | 云端配置端到端：配置读写、Key 保护、`checkOnly` 不真发请求 |
@@ -738,7 +761,7 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 
 ### 14.4 离「完整发售」还差什么（2026-10-20 盘点）
 
-**已经齐了**：程序本体（38 项测试：37 通过 + 1 跳过，约 325 秒跑完）、安装包（Inno 6.7.3 打的，25.8 MB）、用户协议与隐私政策（19 项测试）、打赏入口（手机端实测修过遮挡）、换盘能力、质量回归基线（6 条录音、48 项断言）、服务商收成四家且模型跟服务商绑定（62 项断言 + 老配置迁移 41 项断言）、每条录音自己的笔记风格与提示词（含 AI 笔记的「重点条数」真的写进提示词，17 项断言）、数学公式能渲染成真正的分数和上下标（HTML 与 Word 两条路，44 项断言），而且分数中心贴着数学轴、根号不沉底、括号跟着内容长高（16 项断言）、**PDF 导出**（走本机浏览器的打印引擎，中文字体子集嵌入，52 分钟的课约 3 页 300 KB；笔记类导出只带正文，不含折叠用的逐字稿附录，36 项断言）。
+**已经齐了**：程序本体（38 项测试：36 通过 + 2 跳过，约 375 秒跑完）、安装包（Inno 6.7.3 打的，25.8 MB）、用户协议与隐私政策（19 项测试）、打赏入口（手机端实测修过遮挡）、换盘能力、质量回归基线（6 条录音、48 项断言）、服务商收成四家且模型跟服务商绑定（66 项断言 + 老配置迁移 41 项断言）、每条录音自己的笔记风格与提示词（含 AI 笔记的「重点条数」真的写进提示词，17 项断言）、数学公式能渲染成真正的分数和上下标（HTML 与 Word 两条路，44 项断言），而且分数中心贴着数学轴、根号不沉底、括号跟着内容长高（16 项断言）、**PDF 导出**（走本机浏览器的打印引擎，中文字体子集嵌入，52 分钟的课约 3 页 300 KB；笔记类导出只带正文，不含折叠用的逐字稿附录，36 项断言）。
 
 **还差的是「卖」这一侧的事，不是代码**：
 

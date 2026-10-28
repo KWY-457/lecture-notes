@@ -66,6 +66,14 @@ export const PROVIDERS = [
     // 先生成几百字推理，这些推理 token 也计费（实测问一句「说好」，
     // Qwen3-8B 花了 406 output tokens 其中 404 是 reasoning；Qwen2.5-7B 只花 1 个），
     // 一节课下来能差出好几倍的钱。所以只有不思考的才放「性价比」档。
+    //
+    // thinking: true 的模型，服务端调它时会自动带 `reasoning_effort: 'low'`
+    // （见 server.mjs 的 /llm 分支）。**这不是可选的优化，是能不能用的分界**：
+    // 2026-10-28 实测 GLM-5.3-Flash 整理一份 21316 字的逐字稿，
+    //   不限制 → 810~822 秒（思考 50157 字），而 Node 内置 fetch 有 300 秒
+    //            headersTimeout 硬墙 → 界面永远只看到「fetch failed」；
+    //   加 low  → 160 秒，思考 0 字，产出 6995 字（69 条要点 / 21 个标题）。
+    // 换句话说：不改这个，GLM-5.3-Flash 在「AI 润色」上是**只能失败**的。
     models: [
       {
         id: 'Qwen/Qwen2.5-7B-Instruct',
@@ -94,6 +102,9 @@ export const PROVIDERS = [
         tier: 'free',
         priceNote: '限时免费',
         qualityNote: '不花钱，质量中上，适合先试效果',
+        // 会先思考的模型。不压住的话一份长逐字稿要跑十几分钟，
+        // 而请求在 300 秒就会被 Node 自己掐掉（详见上面那段）。
+        thinking: true,
       },
     ],
     asrModel: 'FunAudioLLM/SenseVoiceSmall',

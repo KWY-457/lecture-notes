@@ -18,6 +18,7 @@ import {
   modelsFor,
   estimateCost,
   resolveAsrTarget,
+  modelSpec,
   selfCheck,
 } from '../public/providers.js';
 
@@ -94,9 +95,31 @@ check(
   })()
 );
 
+/* ------------------- 思考型模型要标出来（不然会超时） ------------------- */
+section('思考型模型');
+// 2026-10-28：GLM-5.3-Flash 的「AI 润色」一直失败，根因是它要先想几百字，
+// 一份 21316 字的逐字稿在不限制时要跑 810~822 秒 —— 而 Node 内置 fetch
+// 有 300 秒 headersTimeout 硬墙，界面只会看到「LLM 请求失败: Headers Timeout Error」。
+// 服务端靠这个 thinking 标记去自动加 reasoning_effort:'low'（实测压到 160 秒、
+// 思考 0 字、产出质量不掉），所以标记本身必须有测试守着。
+// 反过来也要守住：不思考的模型不许乱标，标错等于平白改了用户选的行为。
+const glmSpec = modelSpec('siliconflow', 'llm', 'zai-org/GLM-5.3-Flash');
+check('GLM-5.3-Flash 标了 thinking', glmSpec && glmSpec.thinking === true, JSON.stringify(glmSpec));
+const notThinking = ['Qwen/Qwen2.5-7B-Instruct', 'Qwen/Qwen3-30B-A3B-Instruct-2507', 'deepseek-ai/DeepSeek-V3'];
+check(
+  '不思考的模型没有 thinking 标记',
+  notThinking.every((id) => modelSpec('siliconflow', 'llm', id)?.thinking !== true),
+  notThinking.filter((id) => modelSpec('siliconflow', 'llm', id)?.thinking === true).join(',')
+);
+check(
+  'thinking 只标在 GLM 一家（asr 模型一律不标）',
+  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => k === 'llm' || m.thinking !== true))),
+  'asr 侧出现了 thinking 标记'
+);
+check('没登记的模型名查不到 thinking（服务端据此不加参数）', modelSpec('custom', 'llm', 'whatever') === null);
+
 /* ------------------------- 卡片文案不许带括号 ------------------------- */
-section('卡片文案');
-// 老大明确要求删掉括号里的注释（m02898 原话：「把这截图上括号里的内容给我删了」）。
+section('卡片文案');// 老大明确要求删掉括号里的注释（m02898 原话：「把这截图上括号里的内容给我删了」）。
 // 理由：priceNote / qualityNote 会被拼成一行铺在卡片第二行，括号里的补充说明
 // 在手机窄屏上会折成第三行，反而把「免费 / 付费」这个关键区别挤没了。
 const allNotes = [];
