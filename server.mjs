@@ -30,6 +30,9 @@ import { noteToPdf } from './pdf.mjs';
 // 界面上渲染时修一次（旧笔记不用重生成也变正常），导出时再修一次
 // （导出的 Word 直接落盘，不经过界面）。两处若各写一套迟早会走样。
 import { applyNoteHeader } from './public/llm.js';
+// 导出时要去掉「需要回听核对的地方」那一节（老大 2026-10-28 定的：导出不带它）。
+// 逻辑放在 md.js 里，因为 pdf.mjs 组装 HTML 时也要用同一份规则。
+import { stripCheckSection } from './public/md.js';
 // 逐字稿的规范化（补时间轴、切超长段、修倒序重叠、保真切句）只写一份，
 // 前后端共用。server.mjs 是唯一落盘出口，前端是唯一显示出口，两边规则必须同一套。
 import { normalizeTranscript } from './public/transcript.js';
@@ -2322,7 +2325,9 @@ async function handleApi(req, res, u) {
       // 理由：那份附录是给网页端折叠看的（一节 52 分钟的课两万多字），
       // 导到 Word/PDF 里纸上折叠不了，几十页原文把笔记挤到最后；
       // 真要逐字稿有单独的 txt / srt 导出，本来就更合适。
-      const noteOnlyMd = fixedMd.replace(/<details[\s\S]*?<\/details>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+      const noteOnlyMd = stripCheckSection(
+        fixedMd.replace(/<details[\s\S]*?<\/details>/gi, '').replace(/\n{3,}/g, '\n\n').trim()
+      );
       let buf;
       let name = '';
       let contentType = '';

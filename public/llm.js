@@ -892,6 +892,53 @@ function findAllCI(hay, needle) {
 const ATOM_RE = /\d+(?:[.,]\d+)*|[A-Za-z][A-Za-z0-9#'+\-]{2,}/g;
 
 /**
+ * 这个数字是不是长在一段「式子」里，而不是叙述里。
+ *
+ * 为什么需要：高数/物理/化学课的笔记里，题目条件是用 Unicode 上标写的纯文本公式
+ * （`9x²+4y²=36在(1,3√3/2)处的切线`），它们不经过 `\(...\)` 这类定界符，
+ * stripForCheck 剥不掉，于是 `36`、`1,3` 这些数逐个被拿去对逐字稿 ——
+ * 老师口头只会说「二分之三倍的根号三」，不会念出 `3√3/2`，这就是必然误报。
+ * 实测 cc9c9d21（高数）一篇 5 条警告全是这类，真该报的（283 本、2000 名）反而被淹了。
+ *
+ * 判据只看**紧邻的字符**，不动「数字在原文里到底有没有」这条主判据：
+ *   - 旁边是运算符/上下标/根号/字母变量 → 是式子
+ *   - 本身是逗号分隔的坐标列表且被括号包着（`(1,3√3/2)`、`（15,20,25）`）→ 是式子
+ * 保守起见「度」（`45°辅助线`）不算式子 —— 老师没说过这个角度，那就是真编的，要报。
+ */
+const MATH_NEIGHBOR = /[=+\-×÷·^_<>≤≥≈≠±√∑∏∫∞]/;
+const SUP_SUB = /[\u00B2\u00B3\u00B9\u2070-\u209F]/;
+const BRACKET = /[()（）[\]]/;
+function inMathExpr(s, i, atom) {
+  const isNum = /^\d/.test(atom);
+  // 数字要跳过空格再看邻字符：`= 1在(2,3√3/2)` 里的空格不该让 `1` 逃掉。
+  // 英文词反过来 —— **不许跳空格**：`发表 4 篇 SCI 论文` 里 SCI 两边都是空格，
+  // 一跳就把它当成「贴着公式」，真该核对的词就漏了。
+  // `siny` 前面紧贴着 `5`（`0.5siny`）、`cosy` 前面紧贴着 `-`（`2-cosy`），
+  // 这种才是变量名。
+  let b = i - 1;
+  let a = i + atom.length;
+  if (isNum) {
+    while (b >= 0 && /\s/.test(s[b])) b--;
+    while (a < s.length && /\s/.test(s[a])) a++;
+  }
+  const before = s[b] || '';
+  const after = s[a] || '';
+  if (MATH_NEIGHBOR.test(before) || MATH_NEIGHBOR.test(after)) return true;
+  // 公式里的变量名直接粘在数字/变量上（`0.5siny`、`4y²`）
+  if (/[A-Za-z]/.test(before) || /[A-Za-z]/.test(after)) return true;
+  if (SUP_SUB.test(before) || SUP_SUB.test(after)) return true;
+  // 英文词**紧贴**着数字（`0.5siny`）—— 中间没有空格，那就是系数 × 函数，
+  // 不是正文里的英文单词。`发表 4 篇 SCI 论文` 中间有空格，不受这条影响。
+  if (!isNum && /\d/.test(before)) return true;
+  // 坐标/取值列表：`(1,3√3/2)`、`（15,20,25）`、`(1,1)`
+  if (atom.includes(',') && BRACKET.test(before) && BRACKET.test(after)) return true;
+  // 「两侧是纯数字」只对数字成立（`4y²` 与 `36` 之间只剩数字）。
+  // 英文词不许用这条：`发表 4 篇 SCI 论文` 里 SCI 前面就是数字，它照样是真词。
+  if (isNum && (/\d/.test(before) || /\d/.test(after))) return true;
+  return false;
+}
+
+/**
  * 笔记里有没有「原文对不上的具体事实」。
  *
  * 返回一句一句的人话（直接拼进「需要回听核对的地方」），没有就返回空数组。
@@ -919,6 +966,9 @@ export function findUnverifiedFacts(markdown, sourceText) {
     if (!atom || seen.has(atom.toLowerCase())) continue;
     seen.add(atom.toLowerCase());
     const isNum = /^\d/.test(atom);
+    // 式子里的数字/变量不参与核对（见 inMathExpr 的说明）：
+    // 高数题的 `36`、坐标 `(1,3√3/2)`、`0.5siny` 老师不会念出来，报了全是噪声。
+    if (inMathExpr(md, m.index, atom)) continue;
     let occ = findAllCI(src, atom).map((p) => ({ p, hay: src }));
     if (!occ.length) occ = findAllCI(srcCn, atom).map((p) => ({ p, hay: srcCn }));
     if (!occ.length) {

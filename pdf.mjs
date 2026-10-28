@@ -21,7 +21,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-import { renderMarkdown } from './public/md.js';
+import { renderMarkdown, stripCheckSection } from './public/md.js';
 import { applyNoteHeader } from './public/llm.js';
 import { collapseDisplayMath } from './docx.mjs';
 
@@ -160,10 +160,17 @@ a.ts { color: #6a737d; font-family: Consolas, monospace; font-size: .92em; }
  */
 export function buildNoteHtml({ markdown, title = '', meta = {} } = {}) {
   const raw = String(markdown || '');
+  // 「需要回听核对的地方」不进 PDF（老大 2026-10-28 定的：导出不带这一段）。
+  // **顺序很重要：先洗核对节，再剥 `<details>`**。`stripCheckSection` 认三个出口
+  // （下一个标题 / 分隔线 `---` / `<details>`），先把附录剥掉就等于把最后一个出口
+  // 抽走了，核对节若恰好在正文最后一节，它就只能一路删到文末。
+  // server.mjs 调 buildNoteHtml 之前已经洗过一次，这里再洗是给直接调用本函数的地方
+  // 兜底（tests/test-pdf-export.mjs 就是直接调的）。
+  const noCheck = stripCheckSection(raw);
   // 去掉 <details> 里的逐字稿附录 —— 那是给网页端折叠看的（一份 52 分钟的课能有两万字），
   // 纸上折叠不了，印出来就是几十页原文，把笔记正文挤到看不见。
   // docx.mjs 里也是同样的取舍（见那里的注释），两条导出路线保持一致。
-  const bodyOnly = raw.replace(/<details[\s\S]*?<\/details>/gi, '\n');
+  const bodyOnly = noCheck.replace(/<details[\s\S]*?<\/details>/gi, '\n');
   // 显示公式跨三行写的时候，逐行解析会漏掉定界符 —— 先并成一行再渲染。
   // 跟 docx 导出用的是同一个函数，两条导出路线不会各有一套「显示公式」处理。
   const merged = collapseDisplayMath(bodyOnly.split(/\r?\n/)).join('\n');

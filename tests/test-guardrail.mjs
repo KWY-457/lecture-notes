@@ -277,5 +277,40 @@ console.log('【16】离线笔记自己生成的词频标注 / 页脚 / 自测�
 }
 
 console.log('');
+console.log('【末】公式里的数字不核对（老大 2026-10-28 定的：治高数这类误报）');
+{
+  // 老师的口头语「二分之三倍的根号三」，逐字稿里只有这句，不会出现 `3√3/2`
+  const text = src(
+    '就相当于前面是十六分之四，加上什么呢？这是二分之三倍的根号三，我们给它平个方。',
+    '这一下呢，你把那个 x 等于一代进去，就能算出来这个斜率是负的。'
+  );
+  // 实测 cc9c9d21 那一篇的原句（以前这 4 行一共报 5 条，全是误报）
+  const md = [
+    '- 例题2：椭圆x²/16 + y²/9 = 1在(2,3√3/2)处的切线',
+    '- 求椭圆9x²+4y²=36在(1,3√3/2)处的切线斜率',
+    '7. x³+y³-3xy=0在(1,1)处的dy/dx值是多少？',
+    '- 示例：x - y + 0.5siny = 0的二阶导含(2-cosy)³分母',
+  ].join('\n');
+  const hits = findUnverifiedFacts(md, text);
+  check('坐标列表 (2,3√3/2) 不报', !hits.some((h) => h.startsWith('2,3')), JSON.stringify(hits));
+  check('坐标列表 (1,1) 不报', !hits.some((h) => h.startsWith('1,1')), JSON.stringify(hits));
+  check('带字母的系数 0.5siny 不报', !hits.some((h) => h.startsWith('0.5')), JSON.stringify(hits));
+  check('等式里的 36 不报', !hits.some((h) => h.startsWith('36')), JSON.stringify(hits));
+  check('整篇一条都不报（实测这 5 条以前全是误报）', hits.length === 0, JSON.stringify(hits));
+
+  // 别把主判据一起放掉：叙述里的数字照旧要报
+  const md2 = '- 他扎根基层 30 年，记下 283 本工作笔记，化解 2500 余起纠纷。';
+  const text2 = src('他在基层干了三十年，记录了工作笔记，也化解了很多矛盾。');
+  const hits2 = findUnverifiedFacts(md2, text2);
+  check('叙述里的「283 本」照旧报（这才是这个功能的价值）', hits2.some((h) => h.startsWith('283')), JSON.stringify(hits2));
+
+  // 「45°辅助线」老师没说过这个角度 → 度数不是式子，必须报
+  const md3 = '- 需要把坐标通过45°辅助线转换到侧面投影。';
+  const text3 = src('你需要把那个点转到侧面去，用一个辅助线就行。');
+  const hits3 = findUnverifiedFacts(md3, text3);
+  check('「45°」属于事实不是式子，照旧报', hits3.some((h) => h.startsWith('45')), JSON.stringify(hits3));
+}
+
+console.log('');
 console.log(fail === 0 ? `✅ 通用核对：${pass} 通过 / 0 失败` : `❌ ${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

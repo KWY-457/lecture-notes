@@ -50,6 +50,7 @@ const OFFLINE = [
   ['test-denoise.mjs', '降噪'],
   ['test-docx.mjs', 'Word 导出'],
   ['test-guardrail.mjs', 'AI 笔记不许编造（防幻觉核对）'],
+  ['test-note-strip.mjs', '笔记清洗：提示词泄漏与核对节要删干净，逐字稿附录一个字都不能少'],
   ['test-note-header.mjs', '笔记页眉用真实元数据覆盖'],
   ['test-pipeline.mjs', '笔记生成流水线'],
   ['test-llm-prompt.mjs', 'AI 笔记提示词：重点条数真的生效（自适应/固定都验）'],
