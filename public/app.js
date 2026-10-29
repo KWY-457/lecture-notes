@@ -1942,9 +1942,18 @@ function renderModelPicker(kind) {
       badge.textContent = tier.label;
       nameRow.appendChild(badge);
     }
+    // 「作者推荐」是背书，不是档位，所以单独一个小标签跟在档位后面。
+    // 老大 2026-10-29 点名要的（当时推荐的是 DeepSeek-V3）。
+    if (spec.recommended) {
+      const rec = document.createElement('span');
+      rec.className = 'rec';
+      rec.textContent = '作者推荐';
+      nameRow.appendChild(rec);
+    }
     main.appendChild(nameRow);
 
-    // 第二行：价格 + 一句话代价。两个都缺就不占位。
+    // 第二行：只放一句质量说明（价格由档位徽章负责，具体金额在教程第七章）。
+    // priceNote 现在只剩「模型多大」这类硬事实，本地 Whisper 那三张才有。
     const subBits = [spec.priceNote, spec.qualityNote].filter(Boolean);
     if (subBits.length) {
       const sub = document.createElement('span');

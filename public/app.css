@@ -552,6 +552,17 @@ a { color: var(--brand); }
 .tier-value { color: var(--brand); background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
 .tier-pro { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .tier-custom { color: var(--muted); background: transparent; border-style: dashed; border-color: var(--line); font-style: italic; }
+/* 「作者推荐」：不是档位，是背书，所以做成实心深色小块 —— 一眼能和上面那几个
+   彩色档位徽章分开，也不会跟 tier-value 的淡蓝撞色。
+   2026-10-29 老大点名要的（当时推荐的是 DeepSeek-V3）。 */
+.rec {
+  flex: none; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px;
+  white-space: nowrap; margin-left: 5px;
+  color: #fff; background: var(--text); letter-spacing: .02em;
+}
+@media (prefers-color-scheme: dark) {
+  .rec { color: var(--bg); background: #e8eaed; }
+}
 .model-custom { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
 .model-custom input { flex: 1 1 auto; min-width: 0; }
 .model-custom .hint { flex: none; }

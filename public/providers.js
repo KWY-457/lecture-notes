@@ -22,22 +22,24 @@
  *   kind        'llm' | 'asr' | 'both'（现在全是 'both'，字段留着是为了将来扩展）
  *   baseUrl     OpenAI 兼容的 base（会被拼成 <baseUrl>/chat/completions）
  *   asrUrl      OpenAI 兼容的 /audio/transcriptions 完整地址
- *   models      [{ id, label, tier?, priceNote?, qualityNote?, inPrice?, outPrice? }]
+ *   models      [{ id, label, tier?, recommended?, priceNote?, qualityNote?, inPrice?, outPrice? }]
  *               inPrice/outPrice 单位：元/百万 tokens
  *   free        true 表示新手有免费额度或免费模型可用
  *   console     去哪申请 API Key
  *   docs        官方文档
  *   setup       申请步骤（数组，界面上「怎么申请」直接显示）
  *
- * 模型的三个展示字段（给界面上的模型选择器用，都是可选的）：
+ * 模型的展示字段（给界面上的模型选择器用，都是可选的）：
  *   tier        档位，界面据此上色和排序。**一个标签同时说清「贵不贵 × 好不好」**
  *               （老大 2026-10-29 定的：只讲价格用户没法比）：
  *                 'free'   零成本      不花钱，在本机跑
  *                 'budget' 便宜·够用   花得很少，质量一般
  *                 'value'  便宜·好用   花得少，质量稳
  *                 'pro'    偏贵·更好   贵一档，归纳更细
- *   priceNote   人话价格，如「免费」「约 ¥0.8/小时」「一节课一两分钱」
- *   qualityNote 一句话说明它擅长什么、有什么代价
+ *   recommended 作者推荐（true 才显示）。**不是档位，是「我试下来最常用的那个」的背书**，
+ *               所以单独一个字段，别塞进 tier 里 —— 一个模型可以既是 pro 又被推荐。
+ *   priceNote   只放「模型多重 / 要下多大」这类硬事实，见下面那条 ⚠
+ *   qualityNote 一句话说明它好在哪 / 快不快
  *
  *   ⚠ 这两个 Note 会被原样铺到卡片第二行，**不要写括号**（老大特意要求删掉）：
  *     括号里的补充说明在窄屏上会被折成第三行，反而把档位这个关键区别挤没了。
@@ -91,18 +93,21 @@ export const PROVIDERS = [
         id: 'Qwen/Qwen2.5-7B-Instruct',
         label: 'Qwen2.5-7B-Instruct',
         tier: 'budget',
-        qualityNote: '不思考直接答，一份笔记几十秒就出来',
+        qualityNote: '速度快',
       },
       {
         id: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
         label: 'Qwen3-30B-A3B-2507',
         tier: 'value',
-        qualityNote: 'MoE 架构，长逐字稿归纳更完整，同样不思考',
+        qualityNote: '长逐字稿归纳更完整',
       },
       {
         id: 'deepseek-ai/DeepSeek-V3',
         label: 'DeepSeek-V3',
         tier: 'pro',
+        // 老大 2026-10-29 点名要这个「作者推荐」标签 —— 它不是档位，是「我试下来
+        // 最常用的那个」的背书。所以单独一个字段，不塞进 tier 里。
+        recommended: true,
         qualityNote: '中文笔记质量高，适合重要课程',
       },
       {
@@ -112,7 +117,7 @@ export const PROVIDERS = [
         // 质量稳」这一档。顺带说明：它虽然便宜，但**慢**——这一点不写进卡片小字
         // （老大要求小字只讲生成质量），真要知道就看下面的 thinking 注释。
         tier: 'value',
-        qualityNote: '会先想再写，适合需要推敲的课程',
+        qualityNote: '较慢，质量较好',
         // 会先思考的模型。不压住的话一份长逐字稿要跑十几分钟，
         // 而请求在 300 秒就会被 Node 自己掐掉（详见上面那段）。
         thinking: true,
@@ -127,8 +132,9 @@ export const PROVIDERS = [
         // 2026-10-21 实测 42.7 分钟中文课堂录音：把「习近平总书记」听成
         // 「心里标有问几」、「我同桌一个男生」听成「能说有来」、整句「帮人民造福」
         // 只剩「富哦」。同一段音频跑两遍相似度只有 0.9812，本身就不稳。
-        // 这些缺点**不写进卡片**（老大 2026-10-29：「别写会成片听错这种」）。
-        qualityNote: '出字最快，一节课几十秒就整顿好',
+        // 这些具体错例**不写进卡片**（老大 2026-10-29：「别写会成片听错这种」），
+        // 卡片上只留一句大实话：快，但没那么准。
+        qualityNote: '速度快，准确度略低',
       },
       {
         id: 'Qwen/Qwen3-ASR-1.7B',
@@ -137,8 +143,8 @@ export const PROVIDERS = [
         // 同一条录音 SenseVoice 出 9243 汉字、Qwen3-ASR 出 10074；拿第三方引擎
         // 当裁判，在能逐字对上的 57 个分歧点上 Qwen 对 36 次、SenseVoice 对 21 次。
         // 速度不稳定：9 分钟时快四倍（11.2s vs 47.8s），42.7 分钟反而慢
-        // （53.7s vs 30.1s），所以不拿速度当卖点。
-        qualityNote: '中文认字明显更准，人名和专有名词少出错',
+        // （53.7s vs 30.1s）—— 长录音上确实更慢，卡片就照实写。
+        qualityNote: '较慢，准确性高',
         // 这个模型有单文件硬限制，超了服务端直接回裸 400（Content-Length: 0，
         // 连原因都不给），用户只会看到「转写服务返回 400: 」，完全无从下手。
         // 实测（2026-10-22，真 Key 直连，绕过本服务）：
@@ -182,7 +188,7 @@ export const PROVIDERS = [
         id: 'gpt-4o-mini',
         label: 'gpt-4o-mini',
         tier: 'budget',
-        qualityNote: '英文底子扎实，日常课堂笔记够用',
+        qualityNote: '速度快，质量一般',
         // 美元价 $0.15/$0.60 每百万 tokens，按 1 美元≈7.1 元折算（2026-10-21）
         inPrice: 1.07,
         outPrice: 4.26,
@@ -191,7 +197,7 @@ export const PROVIDERS = [
         id: 'gpt-4o',
         label: 'gpt-4o',
         tier: 'pro',
-        qualityNote: '归纳更细，长课少漏考点',
+        qualityNote: '较慢，长课少漏考点',
         // 美元价 $2.50/$10.00 每百万 tokens（2026-10-21）
         inPrice: 17.75,
         outPrice: 71.0,
@@ -245,21 +251,21 @@ export const PROVIDERS = [
         // （每百字 0.47 个），同一批录音走云端 SenseVoice 是每百字 12.6~15.6 个。
         // 差 27 倍，这不是参数没调好，是模型本身就不输出标点。
         // 这条缺点不写进卡片（老大 2026-10-29 要求小字只讲质量）。
-        qualityNote: '识别最准、抗噪最强，是本机 Whisper 里最好的',
+        qualityNote: '本机最准，占显存',
       },
       {
         id: 'Xenova/whisper-medium',
         label: 'medium',
         tier: 'free',
         priceNote: '约 800MB 模型',
-        qualityNote: '准度接近 turbo，显存占用少一半',
+        qualityNote: '较准，显存少一半',
       },
       {
         id: 'Xenova/whisper-small',
         label: 'small',
         tier: 'free',
         priceNote: '约 250MB 模型',
-        qualityNote: '体积最小，老机器也能跑起来',
+        qualityNote: '体积最小，精度一般',
       },
     ],
     // 笔记走本机 llama-server（helpers/setup-local-llm.ps1 一键部署）
@@ -270,7 +276,7 @@ export const PROVIDERS = [
         id: 'qwen2.5-7b',
         label: 'qwen2.5-7b',
         tier: 'free',
-        qualityNote: '完全不出本机，整理日常课堂笔记够用',
+        qualityNote: '不出本机，速度一般',
       },
     ],
     local: true,

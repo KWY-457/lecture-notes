@@ -155,6 +155,22 @@ const badWords = /听错|错字|不准|变多|略降|代价|不吐标点|吃显�
 const withBad = allNotes.filter(([k, t]) => k.endsWith('qualityNote') && badWords.test(t));
 check('质量说明不写缺点', withBad.length === 0, withBad.map(([k, t]) => `${k}="${t}"`).join(' | '));
 
+// 2026-10-29 老大嫌小字「AI 味重」：像「不思考直接答，一份笔记几十秒就出来」这种
+// 是把技术细节当卖点讲，读着像机器写的。约束两点：
+//   ① 一句话不超过 14 个字（一行放得下，别折行）
+//   ② 不许出现内部术语 / 过程描述（思考、token、MoE 讲得再准，普通人也看不懂）
+const withJargon = allNotes.filter(([, t]) => /不思考|思考过程|token|几十秒|同样不|直接答|推理/.test(t));
+check('质量说明不出现内部术语', withJargon.length === 0, withJargon.map(([k, t]) => `${k}="${t}"`).join(' | '));
+const tooLong = allNotes.filter(([, t]) => [...t].length > 14);
+check('卡片小字一句话不超过 14 字', tooLong.length === 0, tooLong.map(([k, t]) => `${k}="${t}"（${[...t].length} 字）`).join(' | '));
+
+/* ------------------------------ 作者推荐 ------------------------------ */
+section('作者推荐');
+// 推荐不是档位，是背书，所以是独立字段（一个模型可以既是 pro 又被推荐）。
+check('DeepSeek-V3 标了作者推荐', modelsFor('siliconflow', 'llm').some((m) => m.id === 'deepseek-ai/DeepSeek-V3' && m.recommended === true));
+check('推荐的模型必须同时有档位', modelsFor('siliconflow', 'llm').filter((m) => m.recommended).every((m) => !!m.tier));
+check('推荐只出现在 llm 侧（转写目前没有推荐项）', PROVIDERS.every((p) => modelsFor(p.id, 'asr').every((m) => !m.recommended)));
+
 /* ------------------------------ 默认模型 ------------------------------ */
 section('默认模型');
 check('硅基流动转写默认 SenseVoiceSmall', defaultModel('siliconflow', 'asr') === 'FunAudioLLM/SenseVoiceSmall');
