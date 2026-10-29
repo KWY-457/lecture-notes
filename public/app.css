@@ -757,47 +757,95 @@ body.dragging::after {
 .tab.active { background: var(--brand-soft); color: var(--brand); }
 .tab:hover { background: var(--panel-2); }
 
-/* ---------- 思维导图（骨架式：主题 + 关键词） ---------- */
-.mm, .mm ul { list-style: none; margin: 0; padding: 0; }
-.mm > li { position: relative; padding: 4px 0 4px 12px; }
-.mm > li::before {
-  content: ''; position: absolute; left: 0; top: 15px;
-  width: 10px; height: 1px; background: var(--line);
+/* ---------- 思维导图（树形发散：根 → 主题 → 关键词） ----------
+   结构是 div 嵌套而不是 ul/li —— 要的是「父节点纵向居中、子节点横排一列」，
+   flex 直接能做到，ul/li 得先把 list-style 和默认缩进全清掉反而更绕。
+   连线不在这里画：纯 CSS 只能画直角肘，一多就像组织架构图，
+   曲线由 drawMindMapEdges() 量完位置后用 SVG 画（见 public/app.js）。 */
+/* 树天然要宽度（根 + 主题 + 叶子三层）。窄屏放不下就横向滚，别硬折行 ——
+   折行之后「谁是谁的孩子」全靠连线猜，不如让人左右滑。 */
+.mm-wrap { overflow-x: auto; overflow-y: hidden; padding: 6px 2px 10px; -webkit-overflow-scrolling: touch; }
+.mm-wrap::-webkit-scrollbar { height: 8px; }
+.mm-wrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.mm { position: relative; display: inline-flex; align-items: center; width: max-content; min-width: 100%; min-height: 120px; }
+/* SVG 铺满整个 .mm，压在文字下面；pointer-events:none 不然它会挡住时间徽标的点击 */
+.mm-lines {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  overflow: visible; fill: none;
+  stroke: #b9c2d0; stroke-width: 1.3; stroke-linecap: round;
 }
-/* 叶子是标签不是句子：横排一行挤几个，一眼扫完这节讲了什么。
-   注意只有一层嵌套（主题 ul → 标签 li），所以用 > 直接锚，别再写 .mm ul ul。 */
-.mm > li > ul {
-  display: flex; flex-wrap: wrap; gap: 4px 6px;
-  margin: 4px 0 6px 12px; padding-left: 12px;
-  border-left: 1px solid var(--line);
+.mm-node { display: flex; align-items: center; position: relative; }
+.mm-kids { display: flex; flex-direction: column; justify-content: center; gap: 7px; }
+.mm-label {
+  display: inline-flex; align-items: center; position: relative; white-space: nowrap;
+  font-size: 13px; line-height: 1.5; padding: 3px 0;
 }
-.mm > li > ul > li { padding: 0; }
-.mm > li > ul > li::before { display: none; }
+/* 根节点：实心品牌块，一眼知道这是从哪展开的 */
+.mm-root > .mm-label {
+  font-weight: 700; font-size: 15px; color: #fff; background: var(--brand);
+  padding: 8px 14px; border-radius: 8px; box-shadow: var(--shadow);
+}
+.mm-root > .mm-label + .mm-kids { margin-left: 26px; }
+/* 一级分支配色：给文字上色即可。底色块试过，六个色块糊一起反而更乱。 */
+.mm-topic { font-weight: 600; font-size: 14px; padding-left: 2px; }
+/* 下划线离字远一点，用 border 会在字形底部贴着，看着像删除线 */
+.mm-text { padding-bottom: 2px; border-bottom: 1.5px solid currentColor; }
+.mm-b0 { --c: #d97706; }
+.mm-b1 { --c: #dc2626; }
+.mm-b2 { --c: #16a34a; }
+.mm-b3 { --c: #3b6ef6; }
+.mm-b4 { --c: #8e5bd0; }
+.mm-b5 { --c: #c9a227; }
+.mm-topic .mm-text { color: var(--c, var(--text)); }
+/* 主题后面挂一个圆圈数字：这节抽出几个关键词，扫一眼就知道哪块内容多 */
+.mm-count {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; margin-left: 7px; padding: 0 4px;
+  font-size: 10.5px; font-family: var(--mono); line-height: 1;
+  color: var(--muted); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px;
+}
+/* 叶子是纯文字，不是标签块 —— 标签块一多屏幕上全是框，反而看不出层级 */
+.mm-point { font-size: 12.5px; color: var(--text); }
+.mm > .mm-node > .mm-kids > .mm-node > .mm-label { padding-left: 2px; }
+/* 二层叶子之间留出一列呼吸空间，连线才不会贴着字 */
+.mm-root > .mm-kids > .mm-node > .mm-kids { margin-left: 8px; }
 /* 抽不出关键词的主题 —— 空着看着像没加载完，给一行灰字说明 */
-.mm-none {
-  margin: 4px 0 6px 12px; padding-left: 12px;
-  border-left: 1px solid var(--line);
-  font-size: 12.5px; color: var(--muted);
-}
-.mm-root {
-  display: inline-block; font-weight: 700; font-size: 15px;
-  padding: 6px 12px; background: var(--brand-soft); color: var(--brand);
-  border-radius: 8px; margin-bottom: 8px;
-}
-.mm-topic { font-weight: 600; font-size: 14px; }
-.mm-point {
-  font-size: 12.5px; line-height: 1.7; padding: 0 8px;
-  background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 999px; white-space: nowrap;
-}
+.mm-none { font-size: 12.5px; color: var(--muted); font-style: italic; }
 /* 时间徽标是个真按钮（点一下跳到那一刻），所以要把 UA 样式清掉 */
 .mm-t {
-  font-family: var(--mono); font-size: 11px; color: var(--brand);
-  margin-left: 6px; padding: 1px 6px; cursor: pointer;
+  flex: none; font-family: var(--mono); font-size: 11px; color: var(--brand);
+  margin-left: 7px; padding: 1px 6px; cursor: pointer;
   background: transparent; border: 1px solid transparent; border-radius: 999px;
 }
 .mm-t:hover { background: var(--brand-soft); border-color: var(--brand-soft); }
 .mm-t:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+/* 窄屏换成竖向树。
+   横向树要「根 + 主题 + 叶子」三层宽度，390px 的手机上必然要左右滑，
+   而滑动时时间徽标正好在视野外——看着就像少了东西。
+   竖过来之后：根在最上面，主题一列，叶子再缩进一列，一屏能读完，不用滑。
+   连线这时不用 SVG 了（横树的曲线搬到竖排会很怪），改用左边框，
+   就是最常见的目录树样子；SVG 那层直接藏掉，免得残影。 */
+@media (max-width: 860px) {
+  .mm-wrap { overflow-x: visible; }
+  .mm { display: flex; flex-direction: column; align-items: stretch; width: auto; min-width: 0; }
+  .mm-lines { display: none; }
+  .mm-node { flex-direction: column; align-items: flex-start; }
+  .mm-root > .mm-label + .mm-kids { margin-left: 0; margin-top: 10px; }
+  .mm-kids {
+    flex-direction: column; justify-content: flex-start; gap: 8px;
+    margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--line);
+  }
+  /* 主题是一整段小标题，允许折行 —— 竖排里不折行会溢出屏幕 */
+  .mm-topic { white-space: normal; flex-wrap: wrap; row-gap: 2px; }
+  .mm-topic .mm-text { white-space: normal; }
+  .mm > .mm-node > .mm-kids > .mm-node > .mm-label { padding-left: 0; }
+  .mm-root > .mm-kids > .mm-node > .mm-kids { margin-left: 0; }
+  /* 时间徽标跟标题同一行、跟在后面；标题折行时它会自然落到下一个 flex 行 */
+  .mm-t { margin-left: 6px; }
+  .mm-point { white-space: normal; }
+}
 
 /* ---------- 窄屏 ---------- */
 @media (max-width: 1080px) {

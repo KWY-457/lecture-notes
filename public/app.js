@@ -592,6 +592,9 @@ function setTranscriptCollapsed(collapsed, { save = true } = {}) {
       // 隐私模式 / 存储被禁 —— 记不住就记不住，这次照样能收起，不该崩。
     }
   }
+  // 收起/展开会改变笔记面板的宽度，导图里的节点会跟着重新换行 ——
+  // 连线是量出来的，得等布局稳定后再量一遍（下一帧）。
+  if (state.view === 'mindmap') requestAnimationFrame(() => drawMindMapEdges($('note-view')));
 }
 
 function restoreTranscriptCollapsed() {
@@ -710,26 +713,96 @@ function renderMindMapView(note) {
   // 关键词的「主题散布度」要拿全部主题一起算，所以先摊平成一遍
   const hays = outline.map((t) => (t.points || []).map((p) => String(p.text || '')).join(' '));
   const used = new Set();
-  let h = `<div class="mm-root">${esc2(title)}</div><ul class="mm">`;
-  for (const t of outline) {
+  // 树形结构：根 → 主题 → 标签。连线不用 CSS 画（直角肘太死板），
+  // 渲染完由 drawMindMapEdges() 量位置、用 SVG 画三条贝塞尔 —— 见下面那个函数。
+  // 外面套一层 .mm-wrap 是为了窄屏能横向滚动：树天然要宽度，
+  // 手机 390px 放不下一条长主题，挤到换行反而看不出层级。
+  let h = '<div class="mm-wrap"><div class="mm"><div class="mm-node mm-root"><div class="mm-label">' + esc2(title) + '</div><div class="mm-kids">';
+  outline.forEach((t, ti) => {
     const ts =
       t.start != null ? `<button class="mm-t" data-t="${Number(t.start)}" title="从 ${fmtTime(t.start)} 开始播放">${fmtTime(t.start)}</button>` : '';
     let labels = topicLabels(t, { markdown: note?.markdown, used, hays });
     // 一层都抽不出来时才退回「摘半句」。squeezeLabel 只在标点上切，
     // 切不出像样的片段会返回空串 —— 空着就空着，别硬凑。
     if (!labels.length) labels = (t.points || []).map((p) => squeezeLabel(p.text, 10)).filter(Boolean).slice(0, 2);
-    h += `<li><div class="mm-topic">${esc2(t.heading)}${ts}</div>`;
+    // 每条一级分支一个颜色（.mm-b0 ~ .mm-b5），换个话题换种颜色，扫起来能分段。
+    // 连线统一一种灰蓝，跟分支色叠在一起会花 —— 老大说过「颜色觉得绕就一个色」。
+    h += `<div class="mm-node mm-b${ti % 6}"><div class="mm-label mm-topic"><span class="mm-text">${esc2(t.heading)}</span>`;
+    // 圆圈数字 = 这节抽出了几个标签，一眼看出这块有多少内容（AI好记 也是这个位置）。
+    if (labels.length) h += `<span class="mm-count">${labels.length}</span>`;
+    // 时间徽标放在最后：它在手机上会被挤出去，所以 CSS 里窄屏单独处理。
+    h += ts + '</div>';
     if (labels.length) {
-      h += '<ul>';
-      for (const l of labels) h += `<li><div class="mm-point">${esc2(l)}</div></li>`;
-      h += '</ul>';
+      h += '<div class="mm-kids">';
+      for (const l of labels) h += `<div class="mm-node"><div class="mm-label mm-point">${esc2(l)}</div></div>`;
+      h += '</div>';
     } else {
       // 抽不出标签就明说，别留一段空白 —— 空着看起来像没加载出来。
-      h += '<div class="mm-none">这段没提炼出关键词</div>';
+      h += '<div class="mm-kids"><div class="mm-node"><div class="mm-label mm-none">这段没提炼出关键词</div></div></div>';
     }
-    h += '</li>';
+    h += '</div>';
+  });
+  return h + '</div></div></div></div>';
+}
+
+/**
+ * 给思维导图画曲线连线。
+ *
+ * 为什么不在 CSS 里画：纯 CSS 只能画直角肘（border-left + border-bottom），
+ * 一多就像组织架构图。要「从父节点右侧中点弯到子节点左侧中点」的柔和曲线，
+ * 只能用 SVG 的 path，而且必须先量出每个节点在页面上的真实位置。
+ *
+ * 量的是收起的（相对 .mm 容器）：label 右边界 → 子 label 左边界，
+ * 控制点取两者横坐标的中点，纵向各留一半 —— 三次贝塞尔画出来就是标准的树杈。
+ *
+ * 每次渲染/窗口尺寸变化都要重画（换行会让整棵树高度变），所以单独抽出来。
+ */
+function drawMindMapEdges(host) {
+  const wrap = host.querySelector('.mm');
+  if (!wrap) return;
+  const old = wrap.querySelector('.mm-lines');
+  if (old) old.remove();
+  const base = wrap.getBoundingClientRect();
+  if (!base.width || !base.height) return; // 面板藏着（宽度 0）时量不出东西，别画一堆 0 长度线
+  const paths = [];
+  for (const node of wrap.querySelectorAll('.mm-node')) {
+    const kids = node.querySelector(':scope > .mm-kids');
+    if (!kids) continue;
+    const pl = node.querySelector(':scope > .mm-label');
+    if (!pl) continue;
+    const pr = pl.getBoundingClientRect();
+    const x1 = pr.right - base.left;
+    const y1 = pr.top + pr.height / 2 - base.top;
+    for (const kid of kids.children) {
+      const kl = kid.querySelector(':scope > .mm-label');
+      if (!kl) continue;
+      const kr = kl.getBoundingClientRect();
+      const x2 = kr.left - base.left;
+      const y2 = kr.top + kr.height / 2 - base.top;
+      const mx = Math.round(((x1 + x2) / 2) * 10) / 10;
+      paths.push(
+        `<path d="M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${mx} ${y1.toFixed(1)}, ${mx} ${y2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}" />`
+      );
+    }
   }
-  return h + '</ul>';
+  if (!paths.length) return;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'mm-lines');
+  svg.setAttribute('width', String(Math.round(base.width)));
+  svg.setAttribute('height', String(Math.round(base.height)));
+  svg.setAttribute('viewBox', `0 0 ${Math.round(base.width)} ${Math.round(base.height)}`);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = paths.join('');
+  wrap.insertBefore(svg, wrap.firstChild);
+}
+
+/** 窗口变窄变宽会让树重新换行，连线得跟着重画（防抖 150ms，别每像素都算一遍）。 */
+let mmResizeTimer = null;
+function scheduleMindMapRedraw() {
+  clearTimeout(mmResizeTimer);
+  mmResizeTimer = setTimeout(() => {
+    if (state.view === 'mindmap') drawMindMapEdges($('note-view'));
+  }, 150);
 }
 
 function renderNote() {
@@ -752,7 +825,7 @@ function renderNote() {
   }
   if (state.view === 'mindmap') {
     host.innerHTML = renderMindMapView(note);
-    $('note-source').textContent = '思维导图（骨架：主题 + 关键词，点时间可跳转）';
+    $('note-source').textContent = '思维导图（主题 + 关键词，点时间可跳转）';
     // 导图里的时间徽标点一下就跳过去（以前只写了 cursor:pointer，没绑事件）
     host.querySelectorAll('.mm-t').forEach((b) => {
       b.onclick = (e) => {
@@ -760,6 +833,8 @@ function renderNote() {
         seek(b.dataset.t, true);
       };
     });
+    // 曲线连线要等节点排版完才量得到位置 —— 这里 innerHTML 已生效，同步量即可。
+    drawMindMapEdges(host);
     return;
   }
   // 旧笔记里可能还留着模型抄的「课程：（未填）｜日期：｜时长：未知」。

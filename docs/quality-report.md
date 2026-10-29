@@ -319,7 +319,7 @@ Error: 大模型校对输出不是合法 JSON，请重试
 
 ### 6.4 验证
 
-`tests/test-providers.mjs` **66/0**（注册表与目标解析的纯逻辑，含「模型不会串台」「卡片副标题不带括号」「思考型模型标了 thinking」三组）、`tests/test-provider-migration.mjs` **41/0**（老配置自动迁移：收掉的服务商并进 custom / local、Key 和自填项不动、幂等）、`tests/test-cloud-e2e.mjs` **29/0**（真的起一个服务，走 HTTP 验配置读写、Key 保护、`checkOnly` 配置自检不会真发请求）、`tests/dom-app-test.mjs` **149/0**（跑真的 `public/app.js`，验下拉切换会填地址、模型卡片选择器、侧栏每行的「⋯ 编辑」入口带当前笔记设置、教程弹窗能出正文、清 Key 按钮真的发请求、**「重新生成笔记」/「AI 润色」两个按钮的文字与「转写后自动生成笔记」那条代码路径**）。
+`tests/test-providers.mjs` **66/0**（注册表与目标解析的纯逻辑，含「模型不会串台」「卡片副标题不带括号」「思考型模型标了 thinking」三组）、`tests/test-provider-migration.mjs` **41/0**（老配置自动迁移：收掉的服务商并进 custom / local、Key 和自填项不动、幂等）、`tests/test-cloud-e2e.mjs` **29/0**（真的起一个服务，走 HTTP 验配置读写、Key 保护、`checkOnly` 配置自检不会真发请求）、`tests/dom-app-test.mjs` **151/0**（跑真的 `public/app.js`，验下拉切换会填地址、模型卡片选择器、侧栏每行的「⋯ 编辑」入口带当前笔记设置、教程弹窗能出正文、清 Key 按钮真的发请求、**「重新生成笔记」/「AI 润色」两个按钮的文字与「转写后自动生成笔记」那条代码路径**）。
 
 `checkOnly` 值得单说：上传一小时的录音之前，可以先让服务端**只检查配置、不发请求**，把「地址没填 / Key 没填 / 模型名不对」在花钱之前就告诉你。
 
@@ -641,7 +641,7 @@ if (used && used.has(t)) v *= 0.25;   // :539
 | `node tests/test-guardrail.mjs` | **60 / 0** | AI 笔记防幻觉核对：叙述里的数字/英文词必须能在逐字稿里找到；**式子里的不核对**（坐标 `(2,3√3/2)`、系数 `0.5siny`、等式里的 `36`），但 `283 本` `45°` 这种事实照旧要报 |
 | `node tests/test-note-strip.mjs` | **54 / 0** | 笔记清洗：模型抄进来的「硬性要求」整段与「需要回听核对的地方」整节要删干净，**并且逐字稿附录（`---` + `<details>`）一个字都不能少**；2026-10-29 又加一类 —— 整篇被 ```markdown 围栏包住时要去掉围栏但不许误伤正文里的真代码块 |
 | `node tests/probe-worker-progress.mjs` | 全过 | worker 的进度消息：下载中 / 缓存命中（下载回调一条不报）/ 回退 WASM 三种场景，百分比只增不减 |
-| `node tests/dom-app-test.mjs` | **149 / 0** | 跑真的 `public/app.js`：渲染链路 + 服务商切换填地址 + 模型卡片选择器 + 侧栏每行「⋯ 编辑」（改笔记设置，且不会误触发打开录音）+ 教程弹窗 + 清 Key + 笔记按钮改名与自动生成（需真实服务器，见下） |
+| `node tests/dom-app-test.mjs` | **151 / 0** | 跑真的 `public/app.js`：渲染链路 + 服务商切换填地址 + 模型卡片选择器 + 侧栏每行「⋯ 编辑」（改笔记设置，且不会误触发打开录音）+ 教程弹窗 + 清 Key + 笔记按钮改名与自动生成（需真实服务器，见下） |
 | `node tests/api-test.ps1` | **41 / 0** | HTTP 接口：健康检查、转写/笔记/导出 Word（PK 魔数）、配置读写（需真实服务器） |
 | `node tests/check-ui-ids.mjs` / `check-dead-ids.mjs` | 全过 | 界面 id 引用完整性（写错 id 只在浏览器里报错，语法检查抓不到） |
 | `node tests/test-ainote-depth.mjs --ab --max 40` | **9 / 0** | 笔记深度新旧提示词对照（下限保底，不是长稿深度，见 §5.4） |
@@ -704,6 +704,8 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 **① 思维导图改吃 AI 笔记结构（不再口语化）。** 病根：`app.js` 原来优先读 `note.data.outline`，而保存笔记时 `slimAnalysis(note)` 把**离线逐句摘录**存进了 `data`——离线引擎没有大模型，摘录就是口语原样，所以连 AI 笔记的导图也是口语。改法：`renderMindMapView` 先 `outlineFromMarkdown(note.markdown)`，从「## 课堂脉络与重点」的 `### 主题` + `- 要点` 生成书面语导图；markdown 没有结构才回退 `data.outline`。类名 `.mm-root`/`.mm-topic`/`.mm-point` 保留（`dom-app-test` 断言）。
 
 > **2026-10-24 补充：这一版还不够。** 老大随后发现导图 tab 跟笔记 tab 的「课堂脉络与重点」**逐字相同**——因为上面只是把口语换成了书面语，内容仍是同一批要点句子，等于同一份东西摆了两遍。现在的做法是把叶子从「要点整句」换成 `public/note.js` 的 `topicLabels()` 抽的**短标签**（2~4 个，如「成绩构成 → 平时成绩 / 期末考试 / 出勤率 / 课堂表现」），抽不出就整个主题只留标题（宁空勿凑），`squeezeLabel()` 只在全空时摘一个 ≤10 字的短语兜底。同时 `.mm-t` 时间徽标从假的 `cursor:pointer` 改成真的 `<button>`，点击 `seek(t, true)` 跳转。`dom-app-test` 对应断言从「有 mm-point」扩到「每个标签 ≤14 字 / 没有标签与正文要点逐字相同 / 时间是 button」，项数 146 → 149。**抽不出标签的主题会显示一行灰字「这段没提炼出关键词」**（`.mm-none`）—— 留空白看着像没加载完。
+
+> **2026-10-30 补充：结构换成树形发散图。** 老大拿 [AI好记](https://aihaoji.com/) 的截图当标准（「思维导图照着他这样标准来」），要求从「一堆标签堆在一起」改成「根 → 主题 → 叶子」的横向树。改法：`renderMindMapView()` 重写成 `div` 嵌套（`.mm > .mm-node.mm-root > .mm-kids > .mm-node.mm-b0~5 > .mm-kids > .mm-node`），`ul/li` 全删 —— 要的是「父节点纵向居中、子节点排一列」，flex 直接能做到，`ul/li` 得先把 `list-style` 和默认缩进全清掉反而更绕。连线**不用 CSS 画**（纯 CSS 只能画直角肘，一多就像组织架构图），新增 `drawMindMapEdges()` 量每个 `.mm-label` 的 `getBoundingClientRect()`，取「父 label 右边界中点 → 子 label 左边界中点」、控制点取横坐标中点，生成三次贝塞尔 `<path>` 塞进 `.mm-lines` 这个 SVG；面板藏着（宽度 0）时直接 return，不画一堆 0 长度线。每次渲染 / 窗口变化（防抖 150ms）/ 逐字稿面板收起展开都要重画。叶子从圆角胶囊标签改成纯文字（标签块一多屏幕上全是框，反而看不出层级），一级分支保留 6 色轮换（那是「分段」），连线统一一种灰蓝（分支色叠上去会花）。主题后面加圆圈数字（`.mm-count`）表示这节抽出几个关键词。**窄屏（≤860px）自动换成竖向树**：横向树要三层宽度，390px 手机上必然要左右滑，而滑动时时间徽标正好在视野外；竖过来后根在最上面、主题一列、叶子再缩进一列，一屏能读完，连线改用左边框（横树的曲线搬去竖排会很怪），SVG 那层 `display:none`。`dom-app-test` 149 → **151**（新增「树形结构有 .mm-root + .mm-kids」「.mm-point 不再是圆角块」两条）。新探针 `_scratch/shot-mindmap2.mjs` **21 / 0**（桌面 + 手机）。
 
 **② 课程定位删掉。** 老大原话：「课程定位功能目前就是个摆设，去掉」。删了界面按钮 `#btn-course`、`doCourseDetect()`（`app.js`）与 `detectCourse()`（`llm.js`）。课程字段本身保留（可以手填）。
 

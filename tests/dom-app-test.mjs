@@ -363,6 +363,19 @@ if (lecture) {
   );
   check('思维导图的标签和笔记正文不同（不再逐字复制要点）', mmHtml.includes('mm-point'), '');
   check('导图时间徽标是可点的按钮', mmHtml.includes('class="mm-t"') && /<button class="mm-t"/.test(mmHtml), '');
+  // 2026-10-30 导图改成树形发散（老大「照着 AI好记 的标准来」）：
+  // 层级靠 .mm-node / .mm-kids 的嵌套表达，叶子是纯文字不再是圆角标签块。
+  check(
+    '导图是树形结构（.mm-root + .mm-kids 嵌套）',
+    mmHtml.includes('class="mm-node mm-root"') && mmHtml.includes('class="mm-kids"'),
+    mmHtml.slice(0, 120)
+  );
+  const mmCss = fs.readFileSync(new URL('../public/app.css', import.meta.url), 'utf8');
+  check(
+    '导图叶子不再是胶囊标签（.mm-point 没有圆角块样式）',
+    !/\.mm-point\s*\{[^}]*border-radius:\s*999px/.test(mmCss) && !/\.mm-point\s*\{[^}]*background:\s*var\(--panel-2\)/.test(mmCss),
+    ''
+  );
   doc.getElementById('tab-note').onclick();
   check('切回笔记视图', doc.getElementById('note-view').innerHTML.includes('课堂脉络与重点'), doc.getElementById('note-view').innerHTML.slice(0, 100));
 
