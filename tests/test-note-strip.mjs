@@ -12,7 +12,7 @@
  * **「不该删的一个字都没少」** —— 每条用例都同时验两头。
  */
 
-import { stripPromptLeaks, stripCheckSection } from '../public/md.js';
+import { stripPromptLeaks, stripCheckSection, renderMarkdown } from '../public/md.js';
 
 let pass = 0;
 let fail = 0;
@@ -164,6 +164,60 @@ section('stripCheckSection：核对节要删，附录要留');
 {
   check('空输入不崩', stripCheckSection('') === '');
   check('undefined 不崩', stripCheckSection(undefined) === '');
+}
+
+/* ------------------------------------------------------------------ */
+section('整篇被代码块包住（2026-10-29 老大报的：DeepSeek 润色完「风格变了」）');
+
+{
+  // 真实病历：cc9c9d21 的前两行就是这样，而且围栏在第 82 行闭合、后面紧跟我们的附录
+  const md = '```markdown\n' + `${NOTE_HEAD}\n\n${APPENDIX}`;
+  const out = stripPromptLeaks(md);
+  check('开头的 ```markdown 去掉了', !out.startsWith('```'), JSON.stringify(out.slice(0, 20)));
+  check('第一行是 # 标题了', /^#\s/.test(out), JSON.stringify(out.split('\n')[0]));
+  check('于是能正常渲染出一级标题', /<h1>/.test(renderMarkdown(out)));
+  check('不再被当成代码块套 pre', !/<pre>/.test(renderMarkdown(out)));
+  check('附录没丢', out.includes('<details>') && out.trim().endsWith('</details>'));
+}
+
+{
+  // CC 那条的真实形状：围栏在第 82 行闭合，后面是 `---` + `<details>` 附录
+  const inner = `${NOTE_HEAD}`;
+  const md = '```markdown\n' + inner + '\n```\n\n' + APPENDIX;
+  const out = stripPromptLeaks(md);
+  check('围栏闭在后面、后面跟我们自己的附录 → 照样拆', !out.includes('```'), JSON.stringify(out.slice(0, 30)));
+  check('拆完正文在', out.includes('## 一句话概要'));
+  check('拆完附录也在', out.includes('<details>'));
+}
+
+{
+  // 不能误伤：中间一段真代码必须留着
+  const md = `${NOTE_HEAD}\n\n\`\`\`js\nconst a = 1;\n\`\`\`\n\n## 自测题\n\n1. 一加一？\n`;
+  const out = stripPromptLeaks(md);
+  check('中间的真代码块没被动', out.includes('```js') && out.includes('const a = 1;'));
+  check('正文也没被动', out.includes('## 自测题'));
+}
+
+{
+  // 不能误伤：开头是代码块、后面跟正文（不是「整篇被包住」）
+  const md = '\`\`\`js\nconst a = 1;\n\`\`\`\n\n## 概要\n\n一句话。\n';
+  const out = stripPromptLeaks(md);
+  check('开头代码块 + 后面正文 → 不拆', out.startsWith('```js'), JSON.stringify(out.slice(0, 12)));
+}
+
+{
+  // 不能误伤：围栏里面没有 Markdown 标题（那是纯代码）
+  const md = '\`\`\`\nfoo();\nbar();\n';
+  const out = stripPromptLeaks(md);
+  check('围栏里没有标题 → 当成纯代码，不拆', out.includes('foo();') && out.includes('```'));
+}
+
+{
+  // 正常笔记一个字都不该动
+  const md = `${NOTE_HEAD}\n\n${APPENDIX}`;
+  check('正常笔记原样返回', stripPromptLeaks(md) === md.trim());
+  check('空输入不崩', stripPromptLeaks('') === '');
+  check('undefined 不崩', stripPromptLeaks(undefined) === '');
 }
 
 /* ------------------------------------------------------------------ */

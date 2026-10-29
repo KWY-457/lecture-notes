@@ -18,8 +18,57 @@ const esc = (s) =>
  * 模型偶尔会把它们连同要求文字一起抄进输出（如「［40 字以内，说清这节课的主线。］」）。
  * 这里把「［」到「］」的整段（允许跨行）删掉。
  */
+/**
+ * 拆掉「把整篇笔记包进一个代码块」的外壳。
+ *
+ * 起因（2026-10-29 老大报的）：DeepSeek-V3 润色高数那篇时，输出成了
+ *   ```markdown
+ *   # 高数
+ *   ## 一句话概要
+ *   ...
+ * （而且**结尾没有闭合的 ```**）。渲染器于是把整篇当成代码，套进 <pre><code>，
+ * 页面上就出现「# 高数」「## 一句话概要」这种原文 —— 看起来像「风格变了」，
+ * 其实一个字都没变，只是不再解析 Markdown 了。
+ *
+ * 判定要保守，别把正常的代码块也拆了：
+ *   ① 文件开头就是 ``` 围栏；
+ *   ② 围栏里面出现过 Markdown 标题（# / ##）—— 纯代码片段里不会有；
+ *   ③ 闭合围栏之后的尾巴要么是空的，要么是我们自己追加的逐字稿附录
+ *      （`---` + `<details>`）。别的正文跟在后面就不动，那是「代码块 + 正文」。
+ * 三条都成立才认定「整篇被包住」，去掉围栏、保留附录。
+ */
+function stripOuterFence(s) {
+  const lines = s.split('\n');
+  let start = 0;
+  while (start < lines.length && !lines[start].trim()) start++;
+  if (start >= lines.length || !/^\s*```/.test(lines[start])) return s;
+
+  // 第二个 ``` 就是闭合（没有就当成「一直到文末都在围栏里」）
+  let closed = -1;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^\s*```\s*$/.test(lines[i])) { closed = i; break; }
+  }
+  const inner = closed > 0 ? lines.slice(start + 1, closed) : lines.slice(start + 1);
+  // 里面必须有 Markdown 标题才算「整篇被包住」；纯代码片段里不会有 `# ` 标题
+  if (!inner.some((l) => /^#{1,6}[ \t]+\S/.test(l))) return s;
+
+  let tail = [];
+  if (closed > 0) {
+    const rest = lines.slice(closed + 1);
+    const restText = rest.join('\n');
+    const hasReal = rest.filter((l) => l.trim()).length > 0;
+    // 实测 cc9c9d21 就是这种形状：围栏在第 82 行闭合，后面紧跟
+    // `---` + `<details>…逐字稿…</details>` —— 那是我们自己追加的附录，不是模型正文。
+    // 只有「尾巴为空」或「尾巴是我们的附录」才拆栏，否则原样返回。
+    const isOurAppendix = !hasReal || (/<details/i.test(restText) && !/<details/i.test(inner.join('\n')));
+    if (!isOurAppendix) return s;
+    tail = rest;
+  }
+  return [...inner, ...tail].join('\n').replace(/^\n+/, '').replace(/\s+$/, '');
+}
+
 export function stripPromptLeaks(md) {
-  const s = String(md || '');
+  const s = stripOuterFence(String(md || ''));
   // 「硬性要求：1. ……」是我们的提示词原文，模型偶尔会连编号带内容整段抄进正文。
   // 它不像 ［…］ 那样有全角括号可认，只能按标题认：从「硬性要求：」这一行开始，
   // 一直丢到下一个一二级标题（或文末）。实测 1305e386 / bbf8cc40 两篇都抄了 9 条。
