@@ -30,14 +30,26 @@
  *   setup       申请步骤（数组，界面上「怎么申请」直接显示）
  *
  * 模型的三个展示字段（给界面上的模型选择器用，都是可选的）：
- *   tier        'free' 免费 | 'value' 性价比 | 'pro' 更强但更贵
- *               —— 界面据此上色和排序，用户一眼看出「免费够用」还是「花钱更准」
+ *   tier        档位，界面据此上色和排序。**一个标签同时说清「贵不贵 × 好不好」**
+ *               （老大 2026-10-29 定的：只讲价格用户没法比）：
+ *                 'free'   零成本      不花钱，在本机跑
+ *                 'budget' 便宜·够用   花得很少，质量一般
+ *                 'value'  便宜·好用   花得少，质量稳
+ *                 'pro'    偏贵·更好   贵一档，归纳更细
  *   priceNote   人话价格，如「免费」「约 ¥0.8/小时」「一节课一两分钱」
  *   qualityNote 一句话说明它擅长什么、有什么代价
  *
  *   ⚠ 这两个 Note 会被原样铺到卡片第二行，**不要写括号**（老大特意要求删掉）：
- *     括号里的补充说明在窄屏上会被折成第三行，反而把「免费/付费」这个关键区别挤没了。
+ *     括号里的补充说明在窄屏上会被折成第三行，反而把档位这个关键区别挤没了。
  *     要补背景就写注释，不要写进展示字段。
+ *
+ *   ⚠ **priceNote 不要讲价格**（老大 2026-10-29 原话：「下面的小字就不要说价格方面的了，
+ *     只做生成质量介绍就好」）。收费与否已经在档位徽章上说完了，第二行重复一遍是废话，
+ *     而且「约 ¥0.8/小时」这种数字用户还得自己乘时长才知道贵不贵。
+ *     priceNote 留给「这个模型本身多重 / 要下多大」这类硬事实（如「约 1.3GB 模型」），
+ *     没有就留空 —— 它已经不是必填了。
+ *   ⚠ qualityNote 只讲**好在哪**，不写缺点（老大原话：「别写会成片听错这种」）。
+ *     缺点的实测数据一律写进注释，别摆在买家面前。
  *
  * 价格核对日期：2026-10-21
  *   ⚠ 单价以各家控制台为准，这里只写「大致量级 + 去哪看」，不写死具体数字
@@ -78,30 +90,29 @@ export const PROVIDERS = [
       {
         id: 'Qwen/Qwen2.5-7B-Instruct',
         label: 'Qwen2.5-7B-Instruct',
-        tier: 'value',
-        priceNote: '一节课一两分钱',
-        qualityNote: '不思考、直接答，最快最省',
+        tier: 'budget',
+        qualityNote: '不思考直接答，一份笔记几十秒就出来',
       },
       {
         id: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
         label: 'Qwen3-30B-A3B-2507',
         tier: 'value',
-        priceNote: '比 7B 贵一档',
         qualityNote: 'MoE 架构，长逐字稿归纳更完整，同样不思考',
       },
       {
         id: 'deepseek-ai/DeepSeek-V3',
         label: 'DeepSeek-V3',
         tier: 'pro',
-        priceNote: '按量，比上面两档贵',
         qualityNote: '中文笔记质量高，适合重要课程',
       },
       {
         id: 'zai-org/GLM-5.3-Flash',
         label: 'GLM-5.3-Flash',
-        tier: 'free',
-        priceNote: '限时免费',
-        qualityNote: '不花钱，质量中上，适合先试效果',
+        // 2026-10-29 老大实测它不是免费的（原来标的是 'free' 免费），改回按「花得少、
+        // 质量稳」这一档。顺带说明：它虽然便宜，但**慢**——这一点不写进卡片小字
+        // （老大要求小字只讲生成质量），真要知道就看下面的 thinking 注释。
+        tier: 'value',
+        qualityNote: '会先想再写，适合需要推敲的课程',
         // 会先思考的模型。不压住的话一份长逐字稿要跑十几分钟，
         // 而请求在 300 秒就会被 Node 自己掐掉（详见上面那段）。
         thinking: true,
@@ -112,23 +123,22 @@ export const PROVIDERS = [
       {
         id: 'FunAudioLLM/SenseVoiceSmall',
         label: 'SenseVoiceSmall',
-        tier: 'free',
-        priceNote: '完全免费',
+        tier: 'budget',
         // 2026-10-21 实测 42.7 分钟中文课堂录音：把「习近平总书记」听成
         // 「心里标有问几」、「我同桌一个男生」听成「能说有来」、整句「帮人民造福」
         // 只剩「富哦」。同一段音频跑两遍相似度只有 0.9812，本身就不稳。
-        qualityNote: '速度最快、不花钱；长段独白里会成片听错',
+        // 这些缺点**不写进卡片**（老大 2026-10-29：「别写会成片听错这种」）。
+        qualityNote: '出字最快，一节课几十秒就整顿好',
       },
       {
         id: 'Qwen/Qwen3-ASR-1.7B',
         label: 'Qwen3-ASR-1.7B',
         tier: 'value',
-        priceNote: '约 ¥0.8/小时',
         // 同一条录音 SenseVoice 出 9243 汉字、Qwen3-ASR 出 10074；拿第三方引擎
         // 当裁判，在能逐字对上的 57 个分歧点上 Qwen 对 36 次、SenseVoice 对 21 次。
         // 速度不稳定：9 分钟时快四倍（11.2s vs 47.8s），42.7 分钟反而慢
         // （53.7s vs 30.1s），所以不拿速度当卖点。
-        qualityNote: '中文认字明显更准，代价是按小时收费',
+        qualityNote: '中文认字明显更准，人名和专有名词少出错',
         // 这个模型有单文件硬限制，超了服务端直接回裸 400（Content-Length: 0，
         // 连原因都不给），用户只会看到「转写服务返回 400: 」，完全无从下手。
         // 实测（2026-10-22，真 Key 直连，绕过本服务）：
@@ -171,9 +181,8 @@ export const PROVIDERS = [
       {
         id: 'gpt-4o-mini',
         label: 'gpt-4o-mini',
-        tier: 'value',
-        priceNote: '便宜档',
-        qualityNote: '够用且便宜',
+        tier: 'budget',
+        qualityNote: '英文底子扎实，日常课堂笔记够用',
         // 美元价 $0.15/$0.60 每百万 tokens，按 1 美元≈7.1 元折算（2026-10-21）
         inPrice: 1.07,
         outPrice: 4.26,
@@ -182,8 +191,7 @@ export const PROVIDERS = [
         id: 'gpt-4o',
         label: 'gpt-4o',
         tier: 'pro',
-        priceNote: '贵不少',
-        qualityNote: '归纳更细，适合长课',
+        qualityNote: '归纳更细，长课少漏考点',
         // 美元价 $2.50/$10.00 每百万 tokens（2026-10-21）
         inPrice: 17.75,
         outPrice: 71.0,
@@ -195,7 +203,6 @@ export const PROVIDERS = [
         id: 'whisper-1',
         label: 'whisper-1',
         tier: 'value',
-        priceNote: '按分钟计费，约 ¥0.04/分钟',
         qualityNote: '老牌稳定，中文标点齐全',
       },
     ],
@@ -237,21 +244,22 @@ export const PROVIDERS = [
         // 2026-10-20 实测：本地 Whisper 几乎不吐标点，8424 字只有 39 个标点
         // （每百字 0.47 个），同一批录音走云端 SenseVoice 是每百字 12.6~15.6 个。
         // 差 27 倍，这不是参数没调好，是模型本身就不输出标点。
-        qualityNote: '最准、抗噪最强；几乎不吐标点，且吃显卡',
+        // 这条缺点不写进卡片（老大 2026-10-29 要求小字只讲质量）。
+        qualityNote: '识别最准、抗噪最强，是本机 Whisper 里最好的',
       },
       {
         id: 'Xenova/whisper-medium',
         label: 'medium',
         tier: 'free',
         priceNote: '约 800MB 模型',
-        qualityNote: '比 turbo 省显存，准度略降',
+        qualityNote: '准度接近 turbo，显存占用少一半',
       },
       {
         id: 'Xenova/whisper-small',
         label: 'small',
         tier: 'free',
         priceNote: '约 250MB 模型',
-        qualityNote: '低配能用，错字明显变多',
+        qualityNote: '体积最小，老机器也能跑起来',
       },
     ],
     // 笔记走本机 llama-server（helpers/setup-local-llm.ps1 一键部署）
@@ -262,8 +270,7 @@ export const PROVIDERS = [
         id: 'qwen2.5-7b',
         label: 'qwen2.5-7b',
         tier: 'free',
-        priceNote: '只花电费',
-        qualityNote: '完全不出本机；要 6GB 左右显存，低配会卡',
+        qualityNote: '完全不出本机，整理日常课堂笔记够用',
       },
     ],
     local: true,
@@ -349,9 +356,10 @@ export function modelsFor(id, kind) {
  * 等于让人自己去搜价格。这里把「免费 / 性价比 / 更强」做成一眼能认的标签。
  */
 export const TIERS = {
-  free: { label: '免费', hint: '一分钱不花，够用', order: 0 },
-  value: { label: '性价比', hint: '花得少，质量稳', order: 1 },
-  pro: { label: '更强', hint: '更准/更聪明，也更贵', order: 2 },
+  free: { label: '零成本', hint: '不花钱，在本机跑', order: 0 },
+  budget: { label: '便宜·够用', hint: '花得很少，质量一般', order: 1 },
+  value: { label: '便宜·好用', hint: '花得少，质量稳', order: 2 },
+  pro: { label: '偏贵·更好', hint: '贵一档，归纳更细', order: 3 },
 };
 
 /** 取某个模型的完整描述（找不到就返回 null，不编造） */

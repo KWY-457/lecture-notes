@@ -135,14 +135,25 @@ const withParen = allNotes.filter(([, t]) => /[（(]/.test(t));
 check('卡片文案里没有括号注释', withParen.length === 0, withParen.map(([k, t]) => `${k}="${t}"`).join(' | '));
 check(
   '每张卡片都有档位徽章',
-  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => ['free', 'value', 'pro'].includes(m.tier)))),
+  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => ['free', 'budget', 'value', 'pro'].includes(m.tier)))),
   '有模型缺 tier 的服务商：' +
     PROVIDERS.flatMap((p) => ['asr', 'llm'].flatMap((k) => modelsFor(p.id, k).filter((m) => !m.tier).map((m) => `${p.id}/${m.id}`))).join(',')
 );
 check(
-  '每张卡片都有价格说明',
-  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => !!m.priceNote)))
+  '每张卡片都有质量说明',
+  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => !!m.qualityNote))),
+  '缺 qualityNote 的：' +
+    PROVIDERS.flatMap((p) => ['asr', 'llm'].flatMap((k) => modelsFor(p.id, k).filter((m) => !m.qualityNote).map((m) => `${p.id}/${m.id}`))).join(',')
 );
+// 2026-10-29 老大定：卡片第二行只讲生成质量，不讲价格（收费与否已经由档位徽章说完了）。
+// priceNote 只剩「模型多大」这类硬事实（本地 Whisper 那三张），没有就留空。
+const priceWords = /免费|收费|元|¥|\$|价|便宜|贵|花/;
+const priced = allNotes.filter(([k, t]) => k.endsWith('priceNote') && priceWords.test(t));
+check('priceNote 里不再讲价格', priced.length === 0, priced.map(([k, t]) => `${k}="${t}"`).join(' | '));
+// 既然档位已经说了贵不贵，质量说明就不该再写缺点（老大原话：「别写会成片听错这种」）。
+const badWords = /听错|错字|不准|变多|略降|代价|不吐标点|吃显卡|会卡/;
+const withBad = allNotes.filter(([k, t]) => k.endsWith('qualityNote') && badWords.test(t));
+check('质量说明不写缺点', withBad.length === 0, withBad.map(([k, t]) => `${k}="${t}"`).join(' | '));
 
 /* ------------------------------ 默认模型 ------------------------------ */
 section('默认模型');

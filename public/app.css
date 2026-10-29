@@ -540,15 +540,18 @@ a { color: var(--brand); }
   gap: 8px; flex-wrap: wrap; word-break: break-all;
 }
 .model-sub { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
-/* 档位徽章：免费=绿、性价比=蓝、更强=琥珀、手填=灰 */
+/* 档位徽章：零成本=绿、便宜·够用=灰、便宜·好用=蓝、偏贵·更好=琥珀、手填=虚线灰
+   2026-10-29 起标签同时表达「贵不贵 × 好不好」（老大要求：只讲价格的标签用户没法比）。
+   budget 和 custom 都是灰，所以 custom 改成虚线圈 + 斜体 —— 一眼看出它不是一档，是「自己填」。 */
 .tier {
   flex: none; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px;
   border: 1px solid transparent; white-space: nowrap;
 }
 .tier-free { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.tier-budget { color: var(--muted); background: var(--panel-2); border-color: var(--line); }
 .tier-value { color: var(--brand); background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
 .tier-pro { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
-.tier-custom { color: var(--muted); background: var(--panel-2); border-color: var(--line); }
+.tier-custom { color: var(--muted); background: transparent; border-style: dashed; border-color: var(--line); font-style: italic; }
 .model-custom { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
 .model-custom input { flex: 1 1 auto; min-width: 0; }
 .model-custom .hint { flex: none; }
