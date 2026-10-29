@@ -957,14 +957,14 @@ export function renderMarkdown(note) {
 
   // 关键词
   if (note.keywords.length) {
-    L.push('## 🏷️ 关键词');
+    L.push('## 关键词');
     L.push('');
     L.push(note.keywords.map((k) => `\`${k.term}\`(${k.count})`).join(' · '));
     L.push('');
   }
 
   // 大纲 + 重点
-  L.push('## 🧭 课堂脉络与重点');
+  L.push('## 课堂脉络与重点');
   L.push('');
   if (note.style === 'cornell') {
     L.push('| 提示 / 线索 | 笔记要点 |');
@@ -988,7 +988,7 @@ export function renderMarkdown(note) {
 
   // 定义
   if (note.definitions.length) {
-    L.push('## 📖 概念与定义');
+    L.push('## 概念与定义');
     L.push('');
     for (const d of note.definitions) {
       L.push(`- **${d.term}**：${d.definition}${note.hasTime ? '  ' + anchor(d.start) : ''}`);
@@ -998,7 +998,7 @@ export function renderMarkdown(note) {
 
   // 列举要点
   if (note.enumerations.length) {
-    L.push('## 🔢 分条列举的内容');
+    L.push('## 分条列举的内容');
     L.push('');
     for (const e of note.enumerations) {
       L.push(`- ${e.items.length > 1 ? '要点：' : ''}${e.items.map((i) => i.trim()).join(' ／ ')}${note.hasTime ? '  ' + anchor(e.start) : ''}`);
@@ -1007,9 +1007,13 @@ export function renderMarkdown(note) {
   }
 
   // 线索分组
+  //
+  // 这几节以前每节都挂一个 emoji 当图标（🎯 考点 / ❗ 强调 / 🧩 小结 / 💡 例子 /
+  // 📌 任务）。它们会进 markdown、进 Word、进 PDF —— 在 Word 里是一块彩色贴纸，
+  // 在 PDF 里配色跟正文完全不搭。而且这几节本来就靠「考点提示」「举个例子」这种
+  // 小标题自解释，图标只是噪音。去掉了，改用统一的 ## 标题。
   for (const g of note.cueGroups) {
-    const icon = { exam: '🎯', emphasis: '❗', summary: '🧩', example: '💡', task: '📌' }[g.key] || '•';
-    L.push(`## ${icon} ${g.label}`);
+    L.push(`## ${g.label}`);
     L.push('');
     for (const it of g.items) {
       L.push(`- ${it.text}${note.hasTime ? '  ' + anchor(it.start) : ''}`);
@@ -1019,7 +1023,7 @@ export function renderMarkdown(note) {
 
   // 复习问题
   if (note.questions.length) {
-    L.push('## ❓ 自测题（遮住上面，试着回答）');
+    L.push('## 自测题（遮住上面，试着回答）');
     L.push('');
     note.questions.forEach((q, i) => {
       L.push(`${i + 1}. ${q.q}${note.hasTime ? '  ' + anchor(q.start) : ''}`);
@@ -1032,7 +1036,7 @@ export function renderMarkdown(note) {
     L.push('---');
     L.push('');
     L.push('<details>');
-    L.push('<summary>📄 展开完整逐字稿（按时间轴）</summary>');
+    L.push('<summary>展开完整逐字稿（按时间轴）</summary>');
     L.push('');
     for (const s of note.sentences) {
       L.push(`${note.hasTime ? `**${anchor(s.start)}** ` : ''}${s.text}`);

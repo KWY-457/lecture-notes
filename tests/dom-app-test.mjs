@@ -502,12 +502,15 @@ if (lecture) {
   check('侧栏每行都有「⋯」按钮', rowEdits.length > 0, `找到 ${rowEdits.length} 个`);
   check('「⋯」的数量和录音条数一致', rowEdits.length === (lnState?.lectures?.length || 0), `${rowEdits.length} vs ${lnState?.lectures?.length}`);
   const oneEdit = rowEdits[0];
-  // 影子层里 el('span','dots','⋯') 设的是那只 span 的 innerHTML，父按钮的
+  // 影子层里 el('span','dots', html) 设的是那只 span 的 innerHTML，父按钮的
   // textContent 不会跟着变（真浏览器会）。所以顺着 children 把两样都收上来比。
   const deepText = (n) =>
     n ? `${n.textContent || ''}${n.innerHTML || ''}${n.children.map((c) => deepText(c)).join('')}` : '';
   const oneEditTxt = deepText(oneEdit);
-  check('「⋯」里有三个点和「编辑」两个字', oneEditTxt.includes('⋯') && oneEditTxt.includes('编辑'), oneEditTxt);
+  // 三个点从字符「⋯」换成了 SVG 图标 #i-more（2026-10-29 UI 翻新：
+  // emoji 和特殊符号在不同系统上画得不一样，统一改成单色描边图标）。
+  // 这里认图标的引用名，不再认字符本身；「编辑」两个字仍然是文字。
+  check('「⋯」里是三点图标加「编辑」两个字', oneEditTxt.includes('#i-more') && oneEditTxt.includes('编辑'), oneEditTxt);
   check('「⋯」的 title 写着当前笔记设置', !!oneEdit && /笔记设置/.test(oneEdit.title || ''), oneEdit ? oneEdit.title : '');
   // 旧的那个「笔记面板右上角 chip」已经撤掉了（2026-10-23 晚，老大要求挪到侧栏），
   // 断言它确实不在，避免以后又长回来变成两个入口。
@@ -722,10 +725,10 @@ if (lecture) {
   check('顶栏有收起侧栏按钮', !!sideBtn, '');
   sideBtn.onclick();
   check('点收起按钮后侧栏收掉', layoutEl.classList.contains('collapsed'), '');
-  check('收起后按钮变成展开箭头', sideBtn.textContent === '⟩', sideBtn.textContent);
+  check('收起后按钮变成展开箭头', /i-chevron-right/.test(sideBtn.innerHTML || ''), sideBtn.innerHTML);
   sideBtn.onclick();
   check('再点一次侧栏展开', !layoutEl.classList.contains('collapsed'), '');
-  check('展开后按钮变回收起箭头', sideBtn.textContent === '⟨', sideBtn.textContent);
+  check('展开后按钮变回收起箭头', /i-chevron-left/.test(sideBtn.innerHTML || ''), sideBtn.innerHTML);
 
   /* --- 返回列表：详情收起、首页回来 --- */
   doc.getElementById('btn-back').onclick();

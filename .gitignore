@@ -55,6 +55,8 @@ local-llm/
 # ===== 测试临时产物 =====
 tests/.tmp/
 tests/quality-baseline.json.tmp
+# asr-check.mjs 起的临时浏览器 profile（正常跑完会自己删，中途 Ctrl-C 会留下）
+tests/_asr_profile/
 
 # 测试截图（每次跑都会变，别让 diff 全是二进制噪音）
 tests/shots/

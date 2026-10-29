@@ -612,7 +612,7 @@ export async function generateAINote({ segments, meta = {}, analysis = {}, optio
  */
 function buildTranscriptDetails(segments) {
   const hasTime = segments.some((s) => Number(s.end) > Number(s.start) || Number(s.start) > 0);
-  const L = ['---', '', '<details>', '<summary>📄 展开完整逐字稿（按时间轴）</summary>', ''];
+  const L = ['---', '', '<details>', '<summary>展开完整逐字稿（按时间轴）</summary>', ''];
   for (const s of segments) {
     const text = String(s.text || '').trim();
     if (!text) continue;

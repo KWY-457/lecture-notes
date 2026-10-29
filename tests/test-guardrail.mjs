@@ -257,7 +257,7 @@ console.log('【16】离线笔记自己生成的词频标注 / 页脚 / 自测�
 {
   const text = src('递归就是把问题变成同样的小问题，左孩子和右孩子分别处理。二叉树的遍历有四种方式。');
   // 离线引擎的关键词行：`递归 (11) · 左孩子 (4)`
-  const md = '## 🏷️ 关键词\n\n递归 (11) · 左孩子 (4) · 右孩子 (3)\n\n- 递归调用自己。';
+  const md = '## 关键词\n\n递归 (11) · 左孩子 (4) · 右孩子 (3)\n\n- 递归调用自己。';
   const hits = findUnverifiedFacts(md, text);
   check('词频里的数字不报（11 / 4 / 3）', hits.length === 0, JSON.stringify(hits));
 
@@ -271,7 +271,7 @@ console.log('【16】离线笔记自己生成的词频标注 / 页脚 / 自测�
   check('页脚产品名不报', hits3.length === 0, JSON.stringify(hits3));
 
   // 自测题是「问题」不是「陈述」，不该进候选（离线引擎会写「请分条列举」「举个例子」）
-  const withQ = '- 递归调用自己。\n\n## ❓ 自测题（遮住上面，试着回答）\n\n1. 「递归」包含哪几个要点？请分条列举。\n2. 举个例子说明左孩子。\n';
+  const withQ = '- 递归调用自己。\n\n## 自测题（遮住上面，试着回答）\n\n1. 「递归」包含哪几个要点？请分条列举。\n2. 举个例子说明左孩子。\n';
   const terms = findSuspiciousTerms(withQ, text, { limit: 100 }).map((t) => t.text);
   check('自测题的套话不进候选', !terms.some((t) => t.includes('分条列举') || t.includes('举个例子')), JSON.stringify(terms));
 }

@@ -5,19 +5,67 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>讲义笔记 · LectureNotes</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='5' fill='%2333507a'/><path d='M12 6.8C10.5 5.7 8.7 5.2 6.6 5.4v12c1.9-.2 3.5.3 5.4 1.4 1.9-1.1 3.5-1.6 5.4-1.4v-12c-2.1-.2-3.9.3-5.4 1.4z' fill='none' stroke='white' stroke-width='1.5' stroke-linejoin='round'/></svg>">
 <link rel="stylesheet" href="./app.css">
 </head>
 <body>
 
+<!-- ============ 图标 sprite ============
+     全部图标都在这里定义一次，页面各处用 <svg class="i"><use href="#i-xxx"/></svg> 引用。
+     为什么不用 emoji：同一个 codepoint 在 Windows / macOS / Android 上是三套完全
+     不同的画（书本图标在 Windows 是彩色塑料书、在 Linux 上是黑白线条），字号、基线、
+     留白都不可控，排在一起永远对不齐；而且彩色 emoji 跟任何配色方案都打架 ——
+     一屏里冒出十几个饱和色块，就是「AI 生成界面」最典型的观感。
+     全部用 24x24 视框、1.6 圆头描边、currentColor，颜色由 CSS 的 color 决定。 -->
+<svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;overflow:hidden">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.6C10.4 5.4 8.4 4.9 6 5.1v13.2c2.4-.2 4.4.3 6 1.5 1.6-1.2 3.6-1.7 6-1.5V5.1c-2.4-.2-4.4.3-6 1.5z"/><path d="M12 6.6v13.2"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h8M16 8h4M4 16h4M12 16h8"/><circle cx="14" cy="8" r="2"/><circle cx="10" cy="16" r="2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M4 14.5V12a8 8 0 0 1 16 0v2.5"/><rect x="2.6" y="13.4" width="4.6" height="6.4" rx="2.3"/><rect x="16.8" y="13.4" width="4.6" height="6.4" rx="2.3"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m11 6-6 6 6 6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7"/><path d="M6.2 7l.75 12.1A2 2 0 0 0 8.95 21h6.1a2 2 0 0 0 2-1.9L17.8 7"/><path d="M10 11v5.5M14 11v5.5"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.6 3.6a2.1 2.1 0 0 1 3 3L7 19.2l-4 1 1-4z"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20.5 5.4 15l10.8-10.8a2.2 2.2 0 1 1 3.1 3.1L8.5 18.1z"/><path d="m14.6 5.6 3.3 3.3"/></symbol>
+  <symbol id="i-nodes" viewBox="0 0 24 24"><circle cx="4.9" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M6.9 12c4.4 0 4.6-6 10.1-6M6.9 12c4.4 0 4.6 6 10.1 6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7.5A1.5 1.5 0 0 0 6 4.5v15A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M14 3v4h4.5"/><path d="M9 13h6M9 16.5h4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.6 4.6 4.6L19 6.8"/></symbol>
+  <symbol id="i-check-square" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12.2 2.9 2.9L16.3 9"/></symbol>
+  <symbol id="i-square" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.6 12S6.2 5.6 12 5.6 21.4 12 21.4 12 17.8 18.4 12 18.4 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.9"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.9 5.9A9.9 9.9 0 0 1 12 5.6c5.8 0 9.4 6.4 9.4 6.4a17 17 0 0 1-3.2 3.9"/><path d="M6.3 7.7A17.6 17.6 0 0 0 2.6 12S6.2 18.4 12 18.4c1.06 0 2.03-.2 2.9-.53"/><path d="M10.1 10.1a2.9 2.9 0 0 0 3.9 3.9"/><path d="M3.6 3.6l16.8 16.8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.2 7.6A1.6 1.6 0 0 1 4.8 6h3.5a1.6 1.6 0 0 1 1.3.7L11 8.4h8.2A1.6 1.6 0 0 1 20.8 10v7.4a1.6 1.6 0 0 1-1.6 1.6H4.8a1.6 1.6 0 0 1-1.6-1.6z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11.5" height="11.5" rx="2.2"/><path d="M15 5.8A1.8 1.8 0 0 0 13.2 4H5.8A1.8 1.8 0 0 0 4 5.8v7.4A1.8 1.8 0 0 0 5.8 15"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M4 9.5h12v5.8a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10.6h1.6a2.6 2.6 0 0 1 0 5.2H16"/><path d="M6.6 3.4v2.4M10 3.4v2.4M13.4 3.4v2.4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8.4" cy="8.4" r="3.9"/><path d="m11.2 11.2 8.4 8.4"/><path d="m16.4 16.4 2-2"/><path d="m19.1 19.1 2-2"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9.4 3.2h5.2l-1.1 5 3.7 3.5H6.8l3.7-3.5z"/><path d="M12 11.7V21"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.2 21 20H3z"/><path d="M12 9.6v4.6M12 16.9v.1"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3.2 20.4 7.6v8.8L12 20.8 3.6 16.4V7.6z"/><path d="m3.6 7.6 8.4 4.5 8.4-4.5M12 12.1V20.8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.6"/><path d="m15.7 15.7 4.5 4.5"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9.2" y="2.8" width="5.6" height="10.6" rx="2.8"/><path d="M5.4 11.4v.7a6.6 6.6 0 0 0 13.2 0v-.7M12 18.7V21.2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.4 13.7 9l5.6 1.7-5.6 1.7L12 18l-1.7-5.6L4.7 10.7 10.3 9z"/><path d="M18.6 16.4 19.3 18.4l2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M8.9 8.2 12 12.4l3.1-4.2M12 12.4V17"/><path d="M9.4 13.4h5.2M9.4 15.6h5.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.6 9.2a13.5 13.5 0 0 1 18.8 0"/><path d="M5.9 12.7a9 9 0 0 1 12.2 0"/><path d="M9.2 16.2a4.4 4.4 0 0 1 5.6 0"/><path d="M12 19.6v.1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.7-6"/><path d="M20.4 4.4v4.8h-4.8"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 19.4 6v6c0 4.4-3 7.5-7.4 9.2C7.6 19.5 4.6 16.4 4.6 12V6z"/><path d="m9.2 12 2.1 2.1 3.6-3.9"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/></symbol>
+</svg>
+
 <header class="topbar">
-  <button class="icon-btn only-mobile" id="btn-menu" title="课程列表" aria-label="课程列表">☰</button>
-  <button class="icon-btn" id="btn-sidebar" title="收起录音列表" aria-label="收起或展开录音列表">⟨</button>
-  <div class="brand"><span class="logo">📚</span><b>讲义笔记</b><span class="sub">LectureNotes</span></div>
+  <button class="icon-btn only-mobile" id="btn-menu" title="课程列表" aria-label="课程列表"><svg class="i"><use href="#i-menu"/></svg></button>
+  <button class="icon-btn" id="btn-sidebar" title="收起录音列表" aria-label="收起或展开录音列表"><svg class="i"><use href="#i-chevron-left"/></svg></button>
+  <div class="brand"><span class="logo"><svg class="i"><use href="#i-book"/></svg></span><b>讲义笔记</b><span class="sub">LectureNotes</span></div>
   <div class="top-actions">
-    <button class="btn ghost" id="btn-record" title="用电脑麦克风直接录音">⏺ 录音</button>
-    <button class="btn primary" id="btn-import">⬆ 导入录音</button>
-    <button class="icon-btn" id="btn-settings" title="设置">⚙</button>
+    <button class="btn ghost" id="btn-record" title="用电脑麦克风直接录音"><svg class="i sm"><use href="#i-mic"/></svg>录音</button>
+    <button class="btn primary" id="btn-import"><svg class="i sm"><use href="#i-upload"/></svg>导入录音</button>
+    <button class="icon-btn" id="btn-settings" title="设置"><svg class="i"><use href="#i-sliders"/></svg></button>
   </div>
 </header>
 
@@ -27,7 +75,7 @@
       <span>我的课堂录音</span>
       <div class="side-head-actions">
         <button class="btn ghost tiny" id="btn-batch">多选</button>
-        <button class="icon-btn tiny only-mobile" id="btn-close-menu">✕</button>
+        <button class="icon-btn tiny only-mobile" id="btn-close-menu" title="收起列表"><svg class="i"><use href="#i-x"/></svg></button>
       </div>
     </div>
     <div class="side-search"><input id="search" type="search" placeholder="搜索标题 / 课程…"></div>
@@ -49,7 +97,7 @@
     <!-- 空状态 -->
     <div id="empty-state" class="empty">
       <div class="empty-card">
-        <div class="empty-emoji">🎧</div>
+        <div class="empty-mark"><svg class="i"><use href="#i-headphones"/></svg></div>
         <h2>把课堂录音，变成能直接复习的笔记</h2>
         <p>把手机里录的课导进来，自动转成文字、自动挑出重点，生成能直接复习的课堂笔记。</p>
         <div class="empty-actions">
@@ -70,7 +118,7 @@
     <div id="detail" hidden>
       <div class="detail-head">
         <div class="detail-nav">
-          <button class="btn ghost tiny" id="btn-back">← 返回列表</button>
+          <button class="btn ghost tiny" id="btn-back"><svg class="i sm"><use href="#i-arrow-left"/></svg>返回列表</button>
         </div>
         <div class="title-row">
           <h1 id="d-title" contenteditable="true" spellcheck="false">未命名</h1>
@@ -79,7 +127,7 @@
         <div class="meta-row">
           <label class="meta-item">课程 <input id="d-course" placeholder="如：数据结构" size="10"></label>
           <span class="meta-item" id="d-info"></span>
-          <button class="icon-btn tiny" id="btn-delete" title="删除这条录音">🗑</button>
+          <button class="icon-btn tiny" id="btn-delete" title="删除这条录音"><svg class="i"><use href="#i-trash"/></svg></button>
         </div>
       </div>
 
@@ -87,8 +135,8 @@
         <audio id="audio" controls preload="metadata"></audio>
         <div class="quick-jumps">
           <span class="hint">跳到：</span>
-          <button class="btn tiny ghost" data-jump="-30">« 30s</button>
-          <button class="btn tiny ghost" data-jump="30">30s »</button>
+          <button class="btn tiny ghost" data-jump="-30"><svg class="i sm"><use href="#i-chevron-left"/></svg>30s</button>
+          <button class="btn tiny ghost" data-jump="30">30s<svg class="i sm"><use href="#i-chevron-right"/></svg></button>
         </div>
       </div>
 
@@ -126,11 +174,11 @@
         <div class="pane">
           <div class="pane-head">
             <span class="tabs">
-              <button class="tab active" id="tab-note">📝 笔记</button>
-              <button class="tab" id="tab-mindmap">🧠 思维导图</button>
+              <button class="tab active" id="tab-note"><svg class="i sm"><use href="#i-pencil"/></svg>笔记</button>
+              <button class="tab" id="tab-mindmap"><svg class="i sm"><use href="#i-nodes"/></svg>思维导图</button>
             </span>
             <span class="tx-reopen" id="tx-reopen" hidden>
-              <button class="btn ghost tiny" id="btn-tx-expand" title="把逐字稿面板展开回来">📄 展开逐字稿</button>
+              <button class="btn ghost tiny" id="btn-tx-expand" title="把逐字稿面板展开回来"><svg class="i sm"><use href="#i-file"/></svg>展开逐字稿</button>
             </span>
             <span class="pane-hint" id="note-source"></span>
           </div>
@@ -140,10 +188,10 @@
         </div>
         <div class="pane tx-pane">
           <div class="pane-head">
-            <span>📄 逐字稿</span>
+            <span><svg class="i sm"><use href="#i-file"/></svg>逐字稿</span>
             <span class="pane-tools">
               <input id="tx-search" class="tx-search" type="search" placeholder="搜索…">
-              <button class="btn ghost tiny" id="btn-tx-collapse" title="收起逐字稿，让笔记占满整行">收起 ›</button>
+              <button class="btn ghost tiny" id="btn-tx-collapse" title="收起逐字稿，让笔记占满整行">收起<svg class="i sm"><use href="#i-chevron-right"/></svg></button>
             </span>
           </div>
           <p class="tx-note" id="tx-note" hidden></p>
@@ -165,7 +213,7 @@
     <p class="hint">建议：把手机/电脑放在前排，录音时尽量别翻书、别说话。</p>
     <div class="modal-actions">
       <button class="btn ghost" id="btn-rec-cancel">丢弃</button>
-      <button class="btn primary" id="btn-rec-stop">■ 停止并保存</button>
+      <button class="btn primary" id="btn-rec-stop"><svg class="i sm"><use href="#i-stop"/></svg>停止并保存</button>
     </div>
   </div>
 </div>
@@ -221,8 +269,8 @@
 <div class="modal" id="settings-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
-      <h3>⚙ 设置</h3>
-      <button class="icon-btn" id="btn-settings-close">✕</button>
+      <h3><svg class="i"><use href="#i-sliders"/></svg>设置</h3>
+      <button class="icon-btn" id="btn-settings-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
     <div class="settings-body">
 
@@ -297,11 +345,11 @@
 
           <!-- 第一行 = 当前正在用的那一把。平时是密码点，点眼睛才显示明文
                （本机才看得到；手机/局域网根本拿不到明文）。
-               点 ✓ 把它设为「正在用」，点「保存」才真正写进配置。 -->
+               点对勾把它设为「正在用」，点「保存」才真正写进配置。 -->
           <div class="key-row">
             <input id="s-key" type="password" placeholder="粘贴你的 API Key" autocomplete="off" spellcheck="false">
-            <button type="button" class="btn tiny ghost" id="btn-reveal-key" title="显示/隐藏 Key">👁</button>
-            <button type="button" class="btn tiny ghost" id="btn-save-key" title="用这一格里的 Key">✓</button>
+            <button type="button" class="icon-btn tiny" id="btn-reveal-key" title="显示/隐藏 Key"><svg class="i"><use href="#i-eye"/></svg></button>
+            <button type="button" class="icon-btn tiny" id="btn-save-key" title="用这一格里的 Key"><svg class="i"><use href="#i-check"/></svg></button>
           </div>
 
           <!-- 下面每一行 = 一把已保存的 Key，点一下就切过去（切过去后再点保存）。
@@ -360,8 +408,8 @@
           <label for="s-lect-dir">录音目录 <span class="hint" id="s-lect-dir-now"></span></label>
           <div class="path-row">
             <input id="s-lect-dir" type="text" class="path-input" spellcheck="false" placeholder="留空 = 默认位置">
-            <button type="button" class="icon-btn" id="btn-lect-dir-copy" title="复制这个路径">⧉</button>
-            <button type="button" class="icon-btn" id="btn-lect-dir-open" title="在文件管理器里打开">📂</button>
+            <button type="button" class="icon-btn" id="btn-lect-dir-copy" title="复制这个路径"><svg class="i"><use href="#i-copy"/></svg></button>
+            <button type="button" class="icon-btn" id="btn-lect-dir-open" title="在文件管理器里打开"><svg class="i"><use href="#i-folder"/></svg></button>
             <button type="button" class="btn ghost tiny" id="btn-lect-dir-move">迁移</button>
             <button type="button" class="btn ghost tiny" id="btn-lect-dir-reset">重置</button>
           </div>
@@ -371,8 +419,8 @@
           <label for="s-models-dir">模型缓存目录 <span class="hint" id="s-models-dir-now"></span></label>
           <div class="path-row">
             <input id="s-models-dir" type="text" class="path-input" spellcheck="false" placeholder="留空 = 默认位置">
-            <button type="button" class="icon-btn" id="btn-models-dir-copy" title="复制这个路径">⧉</button>
-            <button type="button" class="icon-btn" id="btn-models-dir-open" title="在文件管理器里打开">📂</button>
+            <button type="button" class="icon-btn" id="btn-models-dir-copy" title="复制这个路径"><svg class="i"><use href="#i-copy"/></svg></button>
+            <button type="button" class="icon-btn" id="btn-models-dir-open" title="在文件管理器里打开"><svg class="i"><use href="#i-folder"/></svg></button>
             <button type="button" class="btn ghost tiny" id="btn-models-dir-move">迁移</button>
             <button type="button" class="btn ghost tiny" id="btn-models-dir-reset">重置</button>
           </div>
@@ -393,7 +441,7 @@
           <div class="path-row">
             <input id="lan-url" type="text" class="path-input" readonly spellcheck="false"
                    placeholder="打开开关后显示">
-            <button type="button" class="icon-btn" id="btn-lan-copy" title="复制这个地址">⧉</button>
+            <button type="button" class="icon-btn" id="btn-lan-copy" title="复制这个地址"><svg class="i"><use href="#i-copy"/></svg></button>
           </div>
           <span class="hint" id="lan-status"></span>
         </div>
@@ -421,8 +469,8 @@
       <div>
         <!-- 打赏入口放在这排按钮里，不放在滚动的设置正文里 ——
              正文滚到底才看得见，等于藏起来了；这一排永远固定在最底部。 -->
-        <button class="btn ghost tiny" id="btn-show-donate" title="觉得好用的话，可以请人家喝杯奶茶">☕ 请人家喝奶茶</button>
-        <button class="btn ghost tiny danger" id="btn-shutdown" title="关闭后台服务（关掉整个程序）">⏻ 退出服务</button>
+        <button class="btn ghost tiny" id="btn-show-donate" title="觉得好用的话，可以请人家喝杯奶茶"><svg class="i sm"><use href="#i-coffee"/></svg>请人家喝奶茶</button>
+        <button class="btn ghost tiny danger" id="btn-shutdown" title="关闭后台服务（关掉整个程序）"><svg class="i sm"><use href="#i-x"/></svg>退出服务</button>
         <button class="btn ghost" id="btn-settings-cancel">取消</button>
         <button class="btn primary" id="btn-settings-save">保存</button>
       </div>
@@ -435,8 +483,8 @@
 <div class="modal" id="agree-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
-      <h3 id="agree-title">📄 用户协议</h3>
-      <button class="icon-btn" id="btn-agree-close">✕</button>
+      <h3 id="agree-title"><svg class="i"><use href="#i-file"/></svg><span class="t">用户协议</span></h3>
+      <button class="icon-btn" id="btn-agree-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
     <div class="settings-body help-body">
       <div class="tabs agree-tabs">
@@ -467,14 +515,14 @@
 
   这个弹窗有两个出处：
     · 每次启动程序时自动弹一次（没勾「不再提示」的话）
-    · 设置底部「☕ 请人家喝奶茶」按钮，想看才点
+    · 设置底部「请人家喝奶茶」按钮，想看才点
   自动弹的时候把「下次再说」写成「先看看别处」，手动打开时那句不显示。
 -->
 <div class="modal" id="donate-modal" hidden>
   <div class="modal-card">
     <div class="modal-head">
-      <h3>☕ 请人家喝杯奶茶</h3>
-      <button class="icon-btn" id="btn-donate-close">✕</button>
+      <h3><svg class="i"><use href="#i-coffee"/></svg>请人家喝杯奶茶</h3>
+      <button class="icon-btn" id="btn-donate-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
     <div class="settings-body">
       <p class="hint">
@@ -482,7 +530,7 @@
         如果它真的帮你省下了抄笔记的时间，可以请人家喝杯奶茶 —— 不打赏也照样能用，一点功能都不会少。
       </p>
       <div class="donate-codes" id="donate-codes"></div>
-      <p class="hint">米饭管饱，奶茶是加餐 🍚</p>
+      <p class="hint">米饭管饱，奶茶是加餐</p>
       <label class="donate-opt">
         <input type="checkbox" id="donate-never" />
         <span>以后不要再提示我</span>
@@ -501,8 +549,8 @@
 <div class="modal" id="help-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
-      <h3>📖 使用说明</h3>
-      <button class="icon-btn" id="btn-help-close">✕</button>
+      <h3><svg class="i"><use href="#i-book"/></svg>使用说明</h3>
+      <button class="icon-btn" id="btn-help-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
     <div class="settings-body help-body">
       <h4>最快的用法</h4>
@@ -535,8 +583,8 @@
 <div class="modal" id="api-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
-      <h3>🔑 云端 API 怎么配</h3>
-      <button class="icon-btn" id="btn-api-close">✕</button>
+      <h3><svg class="i"><use href="#i-key"/></svg>云端 API 怎么配</h3>
+      <button class="icon-btn" id="btn-api-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
     <div class="settings-body help-body" id="api-body">
       <p class="hint">正在读取教程…</p>

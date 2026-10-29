@@ -32,7 +32,7 @@ const md = [
   '2. 第二步',
   '',
   '<details>',
-  '<summary>📄 展开完整逐字稿（按时间轴）</summary>',
+  '<summary>展开完整逐字稿（按时间轴）</summary>',
   '',
   '[00:00](#t=0) 附录正文，不该出现在 Word 里。',
   '</details>',

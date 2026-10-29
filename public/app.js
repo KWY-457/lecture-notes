@@ -46,6 +46,27 @@ const el = (tag, cls, html) => {
 const esc = (s) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * 生成一个图标。
+ *   icon('trash')            → <svg class="i"><use href="#i-trash"/></svg>
+ *   icon('trash', 'sm')      → 小一号
+ *
+ * 图标本体在 index.html 顶部的 <svg class="sprite"> 里定义一次，这里只负责引用。
+ * 以前这里到处是 emoji（📌 🗑 ⚠️ ✅），问题是同一个字符在 Windows 上是彩色
+ * 塑料块、在 Linux 上是黑白线条，字号和基线都跟正文对不齐 —— 一屏十几个彩色
+ * 小块就是「AI 生成界面」最典型的观感。改成单色描边图标后颜色由 CSS 的
+ * color 继承，深浅色主题都不用手动管。
+ */
+const icon = (name, cls = '') => `<svg class="i${cls ? ' ' + cls : ''}"><use href="#i-${name}"/></svg>`;
+/** 要真 DOM 节点（不是字符串）时用这个。
+ *  注意不能 document.createElement('svg') —— 那样造出来的是 HTML 未知元素，
+ *  里面的 <use> 也不会进 SVG 命名空间，图标不显示。走 HTML 解析器才正确。 */
+const iconNode = (name, cls = '') => {
+  const wrap = document.createElement('span');
+  wrap.innerHTML = icon(name, cls);
+  return wrap.firstElementChild;
+};
+
 let toastTimer = null;
 function toast(msg, kind = '', ms = 3200) {
   const t = $('toast');
@@ -393,21 +414,21 @@ function renderList() {
     // 这一行是老大区分「哪条真在转」最直接的地方：侧栏里一眼看得到，不用点进去。
     const job = jobs.get(l.id);
     li.innerHTML =
-      (batch.on ? `<span class="li-check">${batch.selected.has(l.id) ? '☑' : '☐'}</span>` : '') +
+      (batch.on ? `<span class="li-check">${icon(batch.selected.has(l.id) ? 'check-square' : 'square')}</span>` : '') +
       `<div class="li-main">
-        <div class="li-title">${l.pinned ? '<span class="pin-tag" title="已置顶">📌</span>' : ''}<span class="dot ${esc(l.status || 'uploaded')}"></span><span>${esc(l.title || '未命名')}</span></div>
+        <div class="li-title">${l.pinned ? `<span class="pin-tag" title="已置顶">${icon('pin')}</span>` : ''}<span class="dot ${esc(l.status || 'uploaded')}"></span><span>${esc(l.title || '未命名')}</span></div>
         <div class="li-meta">${l.course ? `<span>${esc(l.course)}</span>` : ''}<span>${esc(date)}</span>${dur ? `<span>${dur}</span>` : ''}${size ? `<span>${size}</span>` : ''}</div>
         ${job ? `<div class="li-job" data-job="${esc(l.id)}">${esc(jobText(job))}</div>` : ''}
       </div>`;
     // 操作按钮用真实节点：hover 时才显示，且必须 stopPropagation，否则会误触「打开」
     const acts = el('span', 'li-actions');
-    const pb = el('button', 'li-btn' + (l.pinned ? ' on' : ''), '📌');
+    const pb = el('button', 'li-btn' + (l.pinned ? ' on' : ''), icon('pin'));
     pb.title = l.pinned ? '取消置顶' : '置顶';
     pb.onclick = (e) => {
       if (e?.stopPropagation) e.stopPropagation();
       togglePin(l.id);
     };
-    const db = el('button', 'li-btn danger', '🗑');
+    const db = el('button', 'li-btn danger', icon('trash'));
     db.title = '删除';
     db.onclick = (e) => {
       if (e?.stopPropagation) e.stopPropagation();
@@ -422,10 +443,10 @@ function renderList() {
     //
     // 位置在置顶/删除的**右边**：那两只是整行悬浮才出现的，如果把 ⋯ 放它们
     // 左边，一悬浮它们冒出来就会把 ⋯ 往左推 —— 鼠标旁边的按钮忽然换位置
-    // 最容易点错。放右边则 ⋯ 一直钉在最右，📌/🗑 从它左边滑进来。
+    // 最容易点错。放右边则 ⋯ 一直钉在最右，置顶/删除从它左边滑进来。
     const eb = el('button', 'li-edit');
     eb.title = '笔记设置（现在是「' + notePrefsLabel(l) + '」）';
-    eb.appendChild(el('span', 'dots', '⋯'));
+    eb.appendChild(el('span', 'dots', '<svg class="i sm"><use href="#i-more"/></svg>'));
     eb.appendChild(el('span', 'word', '编辑'));
     eb.onclick = (e) => {
       if (e?.stopPropagation) e.stopPropagation();
@@ -535,13 +556,20 @@ async function openLecture(id) {
 
 function renderMetaRow(L) {
   const bits = [];
-  if (L.createdAt) bits.push('导入于 ' + L.createdAt.slice(0, 16).replace('T', ' '));
-  if (L.size) bits.push((L.size / 1048576).toFixed(1) + ' MB');
-  if (L.duration) bits.push('时长 ' + fmtTime(L.duration));
-  if (L.textbook) bits.push('教材《' + esc(L.textbook) + '》');
-  if (L.chapter) bits.push('章节 ' + esc(L.chapter));
-  if (L.originalName) bits.push(esc(L.originalName));
-  $('d-info').innerHTML = bits.map((b) => `<span>${b}</span>`).join(' · ');
+  if (L.createdAt) bits.push({ t: '导入于 ' + L.createdAt.slice(0, 16).replace('T', ' ') });
+  if (L.size) bits.push({ t: (L.size / 1048576).toFixed(1) + ' MB' });
+  if (L.duration) bits.push({ t: '时长 ' + fmtTime(L.duration) });
+  if (L.textbook) bits.push({ t: '教材《' + esc(L.textbook) + '》' });
+  if (L.chapter) bits.push({ t: '章节 ' + esc(L.chapter) });
+  // 文件名单独标一类：它常常跟标题几乎一样（思想道德法治 / 思想道德法治.m4a），
+  // 是这一行里最长又最没用的一项。窄屏上直接藏掉，见 app.css 的 .mi-file。
+  if (L.originalName) bits.push({ t: esc(L.originalName), cls: 'mi-file' });
+  // 用 flex + gap 排这些碎信息，分隔点交给 CSS 的 ::before 画。
+  // 原来是把 ' · ' 当文本节点拼进去 —— 窄屏下 .meta-row 会换行，那些
+  // 「·」自己变成 flex 项，落在行首或行尾，看着像标点掉了（手机截图实测）。
+  $('d-info').innerHTML = bits
+    .map((b) => `<span${b.cls ? ` class="${b.cls}"` : ''}>${b.t}</span>`)
+    .join('');
 }
 
 function currentTranscript() {
@@ -637,7 +665,7 @@ function renderTranscript() {
       const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
       text = text.replace(re, (m) => `<mark>${m}</mark>`);
     }
-    const warn = s.suspect ? '<span class="x-warn" title="这段很可能是识别幻觉，建议回听核对">⚠</span>' : '';
+    const warn = s.suspect ? `<span class="x-warn" title="这段很可能是识别幻觉，建议回听核对">${icon('alert', 'sm')}</span>` : '';
     row.innerHTML = hasTime
       ? `<span class="t">${fmtTime(s.start)}</span><span class="x">${warn}${text}</span>`
       : `<span class="x">${warn}${text}</span>`;
@@ -1867,7 +1895,7 @@ function applyProvider(id, { force = false } = {}) {
     );
   } else if (asrP) {
     if (asrP.note) asrBits.push(asrP.note);
-    if (asrP.free) asrBits.push('✅ 新用户通常有免费额度。');
+    if (asrP.free) asrBits.push('新用户通常有免费额度。');
     // 自定义服务商的地址是用户手填的，不在这里再说一次（下面就有输入框）
     if (id !== 'custom') {
       const url = asrP.asrUrl || asrP.baseUrl || '';
@@ -1875,7 +1903,7 @@ function applyProvider(id, { force = false } = {}) {
     }
     // 模型不在这里重复列 —— 下面就是卡片选择器，同一句话说两遍反而看不清重点。
   } else {
-    asrBits.push('⚠️ 这家没有语音转写接口：转写会自动退回「本地」');
+    asrBits.push('这家没有语音转写接口：转写会自动退回「本地」');
   }
   if (hint) hint.textContent = asrBits.join(' ');
 
@@ -1886,9 +1914,9 @@ function applyProvider(id, { force = false } = {}) {
         '笔记用本机大模型 qwen2.5-7b：不联网、不花钱，但常驻要 6GB 左右显存。需要先在 ⑥ 环境自检里部署本地模型（共约 4.4GB）；没部署时「AI 润色」会自动退回离线引擎挑重点。';
     } else if (llmP) {
       const bits = [];
-      if (llmP.free) bits.push('✅ 新用户通常有免费额度。');
+      if (llmP.free) bits.push('新用户通常有免费额度。');
       const cost = costHintFor(id);
-      if (cost) bits.push('💰 ' + cost);
+      if (cost) bits.push(cost);
       if (llmP.console) bits.push(`申请地址：${llmP.console}`);
       bits.push('申请步骤看上面①的「怎么申请服务商」。');
       llmHint.textContent = bits.join(' ');
@@ -2150,7 +2178,7 @@ function pickTutorialSection(md, kind) {
 /**
  * 渲染「已保存的 Key」清单。
  *
- * 布局跟老大的草图一致：上面一行是当前正在用的那把（输入框 + 眼睛 + ✓），
+ * 布局跟老大的草图一致：上面一行是当前正在用的那把（输入框 + 眼睛 + 对勾），
  * 下面每一行是一把存过的 Key，点那一行就把它填进输入框（再点保存才真正切过去），
  * 这样用户不用重新粘贴，也不用先把正在用的换掉再换回来。
  *
@@ -2168,7 +2196,7 @@ function renderKeyVault(list) {
   box.innerHTML = '';
   if (!state.keyVault.length) {
     box.hidden = true;
-    if (hint) hint.textContent = '还没有存过 Key。粘贴一把点 ✓，以后换服务商可以直接从下面选回来。';
+    if (hint) hint.textContent = '还没有存过 Key。粘贴一把点对勾，以后换服务商可以直接从下面选回来。';
     return;
   }
   box.hidden = false;
@@ -2341,7 +2369,13 @@ async function showAgreement(mode = 'read', which = 'license') {
 function switchAgreementTab(which) {
   $('tab-license').classList.toggle('active', which !== 'privacy');
   $('tab-privacy').classList.toggle('active', which === 'privacy');
-  $('agree-title').textContent = which === 'privacy' ? '📄 隐私政策' : '📄 用户协议';
+  // 标题里那只文档图标在 index.html 里，不能直接 textContent（会把图标抹掉），
+  // 只改文字部分。
+  const t = $('agree-title');
+  const span = t.querySelector('.t');
+  const label = which === 'privacy' ? '隐私政策' : '用户协议';
+  if (span) span.textContent = label;
+  else t.textContent = label;
   $('agree-modal').dataset.which = which === 'privacy' ? 'privacy' : 'license';
   renderAgreementText();
 }
@@ -2572,7 +2606,7 @@ function renderLan() {
 
   if (warn) {
     if (hostOnLan && !on && !unknown) {
-      warn.textContent = '⚠️ 开着的时候，同一个 Wi-Fi 下的任何设备只要知道那串地址就能打开你的页面。传完录音记得回来关掉。';
+      warn.textContent = '开着的时候，同一个 Wi-Fi 下的任何设备只要知道那串地址就能打开你的页面。传完录音记得回来关掉。';
       warn.hidden = false;
     } else {
       warn.hidden = true;
@@ -2740,7 +2774,7 @@ async function moveStorage(which) {
         ? '这个位置是空的，会复制现有的全部文件过去。'
         : `注意：这个位置已经有 ${chk.sizeGB} GB 文件，会和现有内容合并（同名同大小的会跳过）。`) +
       `\n\n源目录：${chk.currentDir}\n\n` +
-      '⚠ 只复制、不删除。迁移完成并确认新位置没问题后，旧目录需要你自己清理。' +
+      '只复制、不删除。迁移完成并确认新位置没问题后，旧目录需要你自己清理。' +
       (chk.sizeGB > 0.01 ? '\n\n如果那是别的程序的数据，请换个目录。' : '');
     if (!confirm(ask)) return;
 
@@ -2792,7 +2826,7 @@ async function resetStorage(which) {
   }
   if (!confirm(
     `把${label}改回默认位置？\n\n默认位置：${st.defaultDir}\n\n` +
-    '⚠ 现有文件不会自动搬回去。如果默认位置是空的，录音列表会看起来「空了」——' +
+    '注意：现有文件不会自动搬回去。如果默认位置是空的，录音列表会看起来「空了」——' +
     '文件其实还在你原来设的那个目录里，随时可以再设回去。',
   )) return;
   try {
@@ -3021,7 +3055,7 @@ async function runDiagnostics() {
 
   box.innerHTML = '';
   for (const r of rows) {
-    box.appendChild(el('div', 'diag-row', `<span class="k">${esc(r.k)}</span><span>${r.ok === false ? '⚠ ' : ''}${esc(r.v)}</span>`));
+    box.appendChild(el('div', 'diag-row', `<span class="k">${esc(r.k)}</span><span>${r.ok === false ? icon('alert', 'sm') + ' ' : ''}${esc(r.v)}</span>`));
   }
   // 本地大模型这一行把「状态 + 操作 + 装在哪」并在一起。
   //
@@ -3039,7 +3073,8 @@ async function runDiagnostics() {
     }
     row.appendChild(el('span', '', status));
     if (!llm.configured) {
-      const b = el('button', 'btn tiny ghost', '📦 部署本地模型（约 4.4GB）');
+      const label = `${icon('box', 'sm')}部署本地模型（约 4.4GB）`;
+      const b = el('button', 'btn tiny ghost', label);
       b.onclick = async () => {
         b.disabled = true;
         b.textContent = '正在准备…';
@@ -3050,7 +3085,7 @@ async function runDiagnostics() {
           toast('部署失败：' + e.message, 'err', 8000);
         }
         b.disabled = false;
-        b.textContent = '📦 部署本地模型（约 4.4GB）';
+        b.innerHTML = label;
         setTimeout(runDiagnostics, 3000);
       };
       row.appendChild(b);
@@ -3143,8 +3178,8 @@ function bind() {
       $('settings-modal').hidden = true;
       document.body.innerHTML =
         '<div style="display:grid;place-items:center;height:100vh;font:16px/1.8 system-ui,sans-serif;text-align:center">' +
-        '<div><div style="font-size:44px">👋</div><h2>后台服务已关闭</h2>' +
-        '<p style="color:#6b7280">这个窗口可以直接关掉了。<br>下次要记笔记，双击项目里的「启动.vbs」。</p></div></div>';
+        `<div><div style="width:46px;height:46px;margin:0 auto 14px;display:grid;place-items:center;border-radius:13px;background:#e7ebf2;color:#33507a"><svg class="i" style="width:23px;height:23px"><use href="#i-check"/></svg></div><h2>后台服务已关闭</h2>` +
+        '<p style="color:#7c766a">这个窗口可以直接关掉了。<br>下次要记笔记，双击项目里的「启动.vbs」。</p></div></div>';
     } catch (e) {
       toast('退出失败：' + e.message, 'err');
     }
@@ -3348,7 +3383,7 @@ function bind() {
   $('btn-sidebar').onclick = () => {
     const layout = $('layout');
     const collapsed = layout.classList.toggle('collapsed');
-    $('btn-sidebar').textContent = collapsed ? '⟩' : '⟨';
+    $('btn-sidebar').innerHTML = `<svg class="i"><use href="#i-chevron-${collapsed ? 'right' : 'left'}"/></svg>`;
     $('btn-sidebar').title = collapsed ? '展开录音列表' : '收起录音列表';
     $('btn-sidebar').setAttribute('aria-label', collapsed ? '展开录音列表' : '收起录音列表');
   };
@@ -3360,8 +3395,7 @@ function bind() {
     out.style.color = '';
     const L = state.current?.lecture || state.lectures[0];
     if (!L) {
-      out.textContent = '✗ 还没有任何录音：先导入一段（哪怕很短）再检查';
-      out.style.color = 'var(--danger)';
+      out.innerHTML = `<span class="res-bad">${icon('x', 'sm')}还没有任何录音：先导入一段（哪怕很短）再检查</span>`;
       return;
     }
     try {
@@ -3369,11 +3403,9 @@ function bind() {
         method: 'POST',
         body: { checkOnly: true, language: $('s-language').value === 'auto' ? '' : $('s-language').value },
       });
-      out.textContent = `✓ 配置齐了：${r.name || r.provider} → ${r.url}（模型 ${r.model}${r.verbose ? '' : '，该服务商不支持逐段时间戳'}）`;
-      out.style.color = 'var(--ok)';
+      out.innerHTML = `<span class="res-ok">${icon('check', 'sm')}配置齐了：${esc(r.name || r.provider)} → ${esc(r.url)}（模型 ${esc(r.model)}${r.verbose ? '' : '，该服务商不支持逐段时间戳'}）</span>`;
     } catch (e) {
-      out.textContent = '✗ ' + e.message;
-      out.style.color = 'var(--danger)';
+      out.innerHTML = `<span class="res-bad">${icon('x', 'sm')}${esc(e.message)}</span>`;
     }
   };
   $('btn-test-llm').onclick = async () => {
@@ -3384,25 +3416,24 @@ function bind() {
       const k = $('s-key').value.trim();
       if (k) body.apiKey = k;
       const r = await api('/llm/test', { method: 'POST', body });
-      out.textContent = `✓ 可用（模型回复：${r.reply || '空'}）`;
-      out.style.color = 'var(--ok)';
+      out.innerHTML = `<span class="res-ok">${icon('check', 'sm')}可用（模型回复：${esc(r.reply || '空')}）</span>`;
     } catch (e) {
-      out.textContent = '✗ ' + e.message;
-      out.style.color = 'var(--danger)';
+      out.innerHTML = `<span class="res-bad">${icon('x', 'sm')}${esc(e.message)}</span>`;
     }
   };
 
   // 从清单里点一把 → 填进输入框（已经由 pickVaultKey 处理，这里不再绑下拉）
 
-  // 👁 显示 / 隐藏 Key
+  // 眼睛：显示 / 隐藏 Key
   $('btn-reveal-key').onclick = () => {
     const inp = $('s-key');
     const show = inp.type === 'password';
     inp.type = show ? 'text' : 'password';
-    $('btn-reveal-key').textContent = show ? '🙈' : '👁';
+    $('btn-reveal-key').innerHTML = `<svg class="i"><use href="#i-${show ? 'eye-off' : 'eye'}"/></svg>`;
+    $('btn-reveal-key').title = show ? '隐藏 Key' : '显示 Key';
   };
 
-  // ✓：把这把 Key 记进清单，并在清单里把它标成「正在用」。
+  // 对勾：把这把 Key 记进清单，并在清单里把它标成「正在用」。
   // 只动清单不动配置 —— 真要写进 config.json 还得点右下角「保存」。
   // 好处是可以先把备用 Key 存起来，不用把正在用的那把换掉再换回来。
   $('btn-save-key').onclick = async () => {
