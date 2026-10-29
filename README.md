@@ -120,7 +120,7 @@
 | 服务商 | 转写模型 | 笔记模型 |
 | --- | --- | --- |
 | 本地（免费、不上传） | `onnx-community/whisper-large-v3-turbo`（默认，约 1.3GB）/ `Xenova/whisper-medium`（约 800MB）/ `Xenova/whisper-small`（约 250MB） | `qwen2.5-7b`（需先在 ⑥ 环境自检里部署，约 4.4GB） |
-| 硅基流动 SiliconFlow | `FunAudioLLM/SenseVoiceSmall`（免费，默认）/ `Qwen/Qwen3-ASR-1.7B`（约 ¥0.8/小时） | `Qwen/Qwen2.5-7B-Instruct`（默认，一节课一两分钱）/ `Qwen/Qwen3-30B-A3B-Instruct-2507` / `deepseek-ai/DeepSeek-V3` / `zai-org/GLM-5.3-Flash`（限时免费） |
+| 硅基流动 SiliconFlow | `FunAudioLLM/SenseVoiceSmall`（免费，默认）/ `Qwen/Qwen3-ASR-1.7B`（约 ¥0.8/小时） | `Qwen/Qwen2.5-7B-Instruct`（默认，一节课一两分钱）/ `Qwen/Qwen3-30B-A3B-Instruct-2507` / `deepseek-ai/DeepSeek-V3` / `zai-org/GLM-5.3-Flash`（便宜，但不是免费的） |
 | OpenAI 官方 | `whisper-1` | `gpt-4o-mini`（默认）/ `gpt-4o` |
 | 自定义（自建/中转） | 自己填 | 自己填 |
 
