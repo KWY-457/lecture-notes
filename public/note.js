@@ -150,6 +150,23 @@ export function outlineFromMarkdown(md) {
         .replace(/\s*\[[^\]]*\]\(#t=[\d.]+\)\s*$/, '')
         .trim();
       if (t) cur.points.push({ text: t });
+    } else if (cur && /^\s+\d+\s*[.、)]\s+/.test(line)) {
+      /**
+       * 「- 操作步骤：」下面那几条 `  1. …` `  2. …` 缩进编号子项。
+       *
+       * 2026-11-01 之前只认 `- ` 开头，编号子项全丢 —— 于是要点里只剩一个
+       * 空壳 `操作步骤：`（冒号后面什么都没了），而真正的三条步骤
+       * （`对F(x,y)=0两边求导，右端得0` …）一条都没进提纲，导图上自然也就没有。
+       * 实测这一处单独就让高数笔记少挂 3~6 条叶子。
+       *
+       * 只收**缩进的**编号行：顶格的 `1. xxx` 是另一个列表的开始，
+       * 不该并进上一条要点。
+       */
+      const t = line
+        .replace(/^\s+\d+\s*[.、)]\s+/, '')
+        .replace(/\s*\[[^\]]*\]\(#t=[\d.]+\)\s*$/, '')
+        .trim();
+      if (t) cur.points.push({ text: t });
     }
   }
   return outline.filter((t) => t.heading);

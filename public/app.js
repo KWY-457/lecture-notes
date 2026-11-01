@@ -6,7 +6,8 @@ import { analyze, fmtTime } from './summarize.js';
 import { transcribeLocal, estimateDecodeMemory } from './asr-local.js';
 import { generateAINote, cleanTranscriptViaLLM, applyNoteHeader } from './llm.js';
 import { cleanSegments } from './cleanup.js';
-import { outlineFromMarkdown as noteOutlineFromMarkdown, topicLabels, squeezeLabel } from './note.js';
+import { outlineFromMarkdown as noteOutlineFromMarkdown } from './note.js';
+import { topicLeaves } from './mindmap.js';
 import { optionsFor, getProvider, modelsFor, defaultModel, estimateCost, PROVIDER_VERSION, sortedModels, TIERS } from './providers.js';
 
 /* ============================ 全局状态 ============================ */
@@ -712,11 +713,13 @@ const outlineFromMarkdown = noteOutlineFromMarkdown;
  * 从笔记渲染一份「骨架式」思维导图。
  *
  * 老版本这里是原样输出每个主题下的要点句子，结果跟左边「课堂脉络与重点」
- * 逐字相同 —— 同一份内容摆两遍，导图 tab 就白占了。导图该给的是结构：
- * 这节课分了哪几块、每块的关键词是什么，一眼能看完整本书的目录。
+ * 逐字相同 —— 同一份内容摆两遍，导图 tab 就白占了。
+ * 后来改成「抽关键词当叶子」（topicLabels + squeezeLabel），解决了复读，
+ * 但词没有命题性：实测一份高数笔记抽出 `看一` `阶档` `道题` `冷记记一下` ——
+ * 那些是 ASR 把口语切碎后的残渣，不是知识点。老大原话：「最重要的是什么，公式，结论」。
  *
- * 所以叶子节点换成 topicLabels() 抽的短标签（2~4 个），抽不出来就整个主题
- * 只留标题（宁可空着，也不要塞一句 40 字的长句当「标签」）。
+ * 现在叶子 = **一句压缩过的命题 + 类型标签**（公式/定义/定理/结论/步骤/例题/易错），
+ * 抽取与判定全在 public/mindmap.js，这里只管拼 DOM。
  * 时间戳点一下就跳过去 —— 以前 CSS 里给了 cursor:pointer 却没绑事件，是个假按钮。
  */
 function renderMindMapView(note) {
@@ -738,35 +741,51 @@ function renderMindMapView(note) {
   }
   const title = note?.data?.title || state.current?.lecture?.title || '课堂笔记';
   const esc2 = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // 关键词的「主题散布度」要拿全部主题一起算，所以先摊平成一遍
-  const hays = outline.map((t) => (t.points || []).map((p) => String(p.text || '')).join(' '));
+  // 跨主题去重：同一句话被两节都抽出来时只挂一次，否则树里出现两遍一样的叶子
   const used = new Set();
   // 树形结构：根 → 主题 → 标签。连线不用 CSS 画（直角肘太死板），
   // 渲染完由 drawMindMapEdges() 量位置、用 SVG 画三条贝塞尔 —— 见下面那个函数。
   // 外面套一层 .mm-wrap 是为了窄屏能横向滚动：树天然要宽度，
   // 手机 390px 放不下一条长主题，挤到换行反而看不出层级。
   let h = '<div class="mm-wrap"><div class="mm"><div class="mm-node mm-root"><div class="mm-label">' + esc2(title) + '</div><div class="mm-kids">';
+  // 「这段没提炼出知识点」整篇只写一次（见下面 else 分支的理由）
+  let saidEmpty = false;
   outline.forEach((t, ti) => {
     const ts =
       t.start != null ? `<button class="mm-t" data-t="${Number(t.start)}" title="从 ${fmtTime(t.start)} 开始播放">${fmtTime(t.start)}</button>` : '';
-    let labels = topicLabels(t, { markdown: note?.markdown, used, hays });
-    // 一层都抽不出来时才退回「摘半句」。squeezeLabel 只在标点上切，
-    // 切不出像样的片段会返回空串 —— 空着就空着，别硬凑。
-    if (!labels.length) labels = (t.points || []).map((p) => squeezeLabel(p.text, 10)).filter(Boolean).slice(0, 2);
+    // 叶子是一句压缩过的**命题**（带类型标签），不是关键词。
+    // 理由见 public/mindmap.js 开头的注释：词没有命题性，
+    // `看一` `阶档` `道题` 这种 ASR 残渣挂上去等于没提炼。
+    const leaves = topicLeaves(t, { used });
+    // 一条都抽不出来就明说「这段没提炼出知识点」，**不再退回「摘半句」**。
+    // 原来这里有一层 `squeezeLabel(p.text, 10)` 兜底，产出的是
+    // 「为什么是这样的」「当于三阶导的时候」「他考试」「所以要乘一个负的」——
+    // 全是口语长句被硬切十来个字，比空着更像坏了。
+    // 老大原话「实在不会不要瞎编」，摘半句就是瞎编的一种。
     // 每条一级分支一个颜色（.mm-b0 ~ .mm-b5），换个话题换种颜色，扫起来能分段。
     // 连线统一一种灰蓝，跟分支色叠在一起会花 —— 老大说过「颜色觉得绕就一个色」。
     h += `<div class="mm-node mm-b${ti % 6}"><div class="mm-label mm-topic"><span class="mm-text">${esc2(t.heading)}</span>`;
-    // 圆圈数字 = 这节抽出了几个标签，一眼看出这块有多少内容（AI好记 也是这个位置）。
-    if (labels.length) h += `<span class="mm-count">${labels.length}</span>`;
+    // 圆圈数字 = 这节抽出了几个知识点，一眼看出这块有多少内容（AI好记 也是这个位置）。
+    if (leaves.length) h += `<span class="mm-count">${leaves.length}</span>`;
     // 时间徽标放在最后：它在手机上会被挤出去，所以 CSS 里窄屏单独处理。
     h += ts + '</div>';
-    if (labels.length) {
+    if (leaves.length) {
       h += '<div class="mm-kids">';
-      for (const l of labels) h += `<div class="mm-node"><div class="mm-label mm-point">${esc2(l)}</div></div>`;
+      for (const l of leaves) {
+        // 类型标签只在明确判出来时才有（公式/定义/定理/结论/步骤/例题/易错），
+        // 判不出来就只挂一行字，不写「要点」—— 满屏「要点」等于没有分类。
+        const badge = l.label && l.type !== 'point' ? `<span class="mm-badge">${esc2(l.label)}</span>` : '';
+        h += `<div class="mm-node"><div class="mm-label mm-point">${badge}${esc2(l.text)}</div></div>`;
+      }
       h += '</div>';
     } else {
-      // 抽不出标签就明说，别留一段空白 —— 空着看起来像没加载出来。
-      h += '<div class="mm-kids"><div class="mm-node"><div class="mm-label mm-none">这段没提炼出关键词</div></div></div>';
+      // 抽不出知识点就明说，别留一段空白 —— 空着看起来像没加载出来。
+      // 同一份笔记里空主题一多，这句话会重复七八遍，看着像报错、反而更乱；
+      // 所以只在**第一个**空主题下面写一次，后面的空主题就留空（圆点数字本来就没有）。
+      if (!saidEmpty) {
+        saidEmpty = true;
+        h += '<div class="mm-kids"><div class="mm-node"><div class="mm-label mm-none">这段没提炼出知识点</div></div></div>';
+      }
     }
     h += '</div>';
   });

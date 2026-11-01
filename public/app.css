@@ -1083,8 +1083,22 @@ body.dragging::after {
   color: var(--muted-2); background: var(--panel-2);
   border: 1px solid var(--line); border-radius: 999px;
 }
-/* 叶子是纯文字，不是标签块 —— 标签块一多屏幕上全是框，反而看不出层级 */
-.mm-point { font-size: 12.5px; color: var(--text-2); }
+/* 叶子是纯文字 + 一枚小小的类型徽章，不做成标签块 ——
+   标签块一多屏幕上全是框，反而看不出层级。
+   字号/颜色原来是 12.5px + --text-2，比正文(15px)小一档还偏灰，
+   跟左侧 14px 的主题差了两层，视觉上像「附注」而不是内容 ——
+   老大说「最右边一列的字体是不是有点突兀」就是指这个。
+   现在 13px + --text，只比主题小一点点，靠 indent 和连线区分层级。 */
+.mm-point { font-size: 13px; color: var(--text); line-height: 1.55; }
+/* 类型徽章：公式 / 定义 / 定理 / 结论 / 步骤 / 例题 / 易错。
+   极窄的一条色带 + 小字，比圆角药丸安静，也不会让叶子变宽太多。 */
+.mm-badge {
+  flex: none; display: inline-flex; align-items: center;
+  margin-right: 6px; padding: 0 4px;
+  font-size: 10px; line-height: 15px; letter-spacing: .04em;
+  color: var(--brand); background: var(--brand-soft);
+  border-radius: 3px; font-weight: 600;
+}
 .mm > .mm-node > .mm-kids > .mm-node > .mm-label { padding-left: 2px; }
 /* 二层叶子之间留出一列呼吸空间，连线才不会贴着字 */
 .mm-root > .mm-kids > .mm-node > .mm-kids { margin-left: 8px; }

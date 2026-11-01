@@ -354,12 +354,24 @@ if (lecture) {
   const mmHtml = doc.getElementById('note-view').innerHTML;
   check('思维导图视图渲染出主题节点', mmHtml.includes('mm-topic'), mmHtml.slice(0, 160));
   check('思维导图叶子是短标签（mm-point 还在）', mmHtml.includes('mm-point'), '');
-  // 导图不该复述笔记正文：任何一个叶子都不该长到像一整句要点
-  const mmLeaf = [...mmHtml.matchAll(/class="mm-point">([^<]*)</g)].map((m) => m[1]);
+  // 导图不该复述笔记正文：叶子是**压缩过的一句命题**（不是整段要点）。
+  // 2026-11-01 起叶子带类型徽章 `<span class="mm-badge">公式</span>`，
+  // 量长度前得先把它剥掉，否则 `([^<]*)` 只能捕到空串、这条断言等于没测。
+  const mmLeaf = [...mmHtml.matchAll(/class="mm-point">([\s\S]*?)<\/div>/g)]
+    .map((m) => m[1].replace(/<span class="mm-badge">[\s\S]*?<\/span>/g, '').replace(/<[^>]*>/g, '').trim())
+    .filter(Boolean);
   check(
-    '思维导图的标签都很短（≤14 字，不是整句复述）',
-    mmLeaf.length === 0 || mmLeaf.every((s) => [...s].length <= 14),
-    mmLeaf.filter((s) => [...s].length > 14).slice(0, 2).join(' | ')
+    '思维导图的叶子都很短（≤26 字，不是整句复述）',
+    mmLeaf.length === 0 || mmLeaf.every((s) => [...s].length <= 26),
+    mmLeaf.filter((s) => [...s].length > 26).slice(0, 2).join(' | ')
+  );
+  // 类型徽章只在「公式/定义/定理/结论/步骤/例题/易错」判得出来时才挂，
+  // 判不出来只挂一行字 —— 满屏「要点」等于没分类，所以这里只要求徽章名在白名单里。
+  const mmBadges = [...mmHtml.matchAll(/class="mm-badge">([^<]*)</g)].map((m) => m[1]);
+  check(
+    '导图徽章只在白名单里（不出现「要点」这种没信息量的标签）',
+    mmBadges.every((s) => ['公式', '定义', '定理', '结论', '步骤', '例题', '易错'].includes(s)),
+    mmBadges.join(',')
   );
   check('思维导图的标签和笔记正文不同（不再逐字复制要点）', mmHtml.includes('mm-point'), '');
   check('导图时间徽标是可点的按钮', mmHtml.includes('class="mm-t"') && /<button class="mm-t"/.test(mmHtml), '');

@@ -55,6 +55,7 @@ const OFFLINE = [
   ['test-pipeline.mjs', '笔记生成流水线'],
   ['test-llm-prompt.mjs', 'AI 笔记提示词：重点条数真的生效（自适应/固定都验）'],
   ['test-mindmap-labels.mjs', '思维导图标签：强信号优先、泛词不要、抽不出就空着'],
+  ['test-mindmap-leaf.mjs', '思维导图叶子：压缩成命题 + 类型标签，抽不出就空着'],
   ['test-tex.mjs', 'LaTeX 公式渲染：分数/上下标/希腊字母/极端输入不崩'],
   ['test-tex-style.mjs', 'LaTeX 对齐：分数贴数学轴、根号不沉底、括号跟着长高'],
   ['test-tx-collapse.mjs', '逐字稿面板收起/展开：必须留回程入口、收起后正文真占满'],
