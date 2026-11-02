@@ -63,9 +63,9 @@
   <button class="icon-btn" id="btn-sidebar" title="收起录音列表" aria-label="收起或展开录音列表"><svg class="i"><use href="#i-chevron-left"/></svg></button>
   <div class="brand"><span class="logo"><svg class="i"><use href="#i-book"/></svg></span><b>讲义笔记</b><span class="sub">LectureNotes</span></div>
   <div class="top-actions">
-    <button class="btn ghost" id="btn-record" title="用电脑麦克风直接录音"><svg class="i sm"><use href="#i-mic"/></svg>录音</button>
+    <button class="btn ghost phone-hide" id="btn-record" title="用电脑麦克风直接录音"><svg class="i sm"><use href="#i-mic"/></svg>录音</button>
     <button class="btn primary" id="btn-import"><svg class="i sm"><use href="#i-upload"/></svg>导入录音</button>
-    <button class="icon-btn" id="btn-settings" title="设置"><svg class="i"><use href="#i-sliders"/></svg></button>
+    <button class="icon-btn phone-hide" id="btn-settings" title="设置"><svg class="i"><use href="#i-sliders"/></svg></button>
   </div>
 </header>
 
@@ -74,7 +74,7 @@
     <div class="side-head">
       <span>我的课堂录音</span>
       <div class="side-head-actions">
-        <button class="btn ghost tiny" id="btn-batch">多选</button>
+        <button class="btn ghost tiny phone-hide" id="btn-batch">多选</button>
         <button class="icon-btn tiny only-mobile" id="btn-close-menu" title="收起列表"><svg class="i"><use href="#i-x"/></svg></button>
       </div>
     </div>
@@ -87,7 +87,7 @@
       <button class="btn tiny ghost" id="btn-batch-exit">退出多选</button>
     </div>
     <ul id="lecture-list" class="lecture-list"></ul>
-    <div class="side-foot">
+    <div class="side-foot phone-hide">
       <button class="btn ghost tiny" id="btn-health">环境自检</button>
       <button class="btn ghost tiny" id="btn-help">使用说明</button>
     </div>
@@ -98,19 +98,29 @@
     <div id="empty-state" class="empty">
       <div class="empty-card">
         <div class="empty-mark"><svg class="i"><use href="#i-headphones"/></svg></div>
-        <h2>把课堂录音，变成能直接复习的笔记</h2>
-        <p>把手机里录的课导进来，自动转成文字、自动挑出重点，生成能直接复习的课堂笔记。</p>
+        <h2><span class="pc-only">把课堂录音，变成能直接复习的笔记</span><span class="only-remote">把这节课的录音传到电脑上</span></h2>
+        <p><span class="pc-only">把手机里录的课导进来，自动转成文字、自动挑出重点，生成能直接复习的课堂笔记。</span><span class="only-remote">手机上不用装 App、不用登录：选个文件传上去，转文字、挑重点、导出都在电脑上做。</span></p>
         <div class="empty-actions">
           <button class="btn primary big" id="btn-import-2">选择音频文件</button>
-          <button class="btn big" id="btn-demo">先用示例体验</button>
+          <button class="btn big phone-hide" id="btn-demo">先用示例体验</button>
         </div>
-        <ol class="steps">
+        <ol class="steps phone-hide">
           <li><b>手机录音</b>：用手机自带的录音机上课录音（不用装 App）。</li>
           <li><b>传到电脑</b>：手机和电脑连同一个 Wi-Fi，用手机浏览器打开本页的局域网地址上传；或者直接微信/数据线拷到电脑。</li>
           <li><b>自动整理</b>：在本页点「开始转写」，转写完笔记会自动生成（重点 + 逐字稿 + 自测题），不用再点。</li>
           <li><b>导出</b>：点「导出 Word」，用 Word 或 WPS 打开就是一份排版好的复习笔记。</li>
         </ol>
-        <p class="hint" id="lan-hint"></p>
+        <!-- 手机上（另一台设备通过局域网打开）走这一份说明。
+             两边不共用同一段文字：电脑版讲的是「在本页转写、导出」，而这些
+             在手机上根本点不到 —— 照抄过去等于骗人。 -->
+        <ol class="steps only-remote">
+          <li><b>在电脑上录音</b>：用手机自带的录音机上课录音，文件留在手机里。</li>
+          <li><b>点上面的按钮传上去</b>：选文件、起个名字，传完这一步就结束了，手机会提示「已上传」。</li>
+          <li><b>回到电脑上处理</b>：转写、生成笔记、导出 Word / PDF 都在电脑上做，手机上不用管。</li>
+        </ol>
+        <!-- 这条提示是给电脑上的人看的（「去设置里打开手机访问」）。手机上已经
+             在传了，还在这儿说「怎么开手机访问」等于对着已经进门的人教开门。 -->
+        <p class="hint phone-hide" id="lan-hint"></p>
       </div>
     </div>
 
@@ -205,7 +215,7 @@
 </main>
 
 <!-- ============ 录音弹窗 ============ -->
-<div class="modal" id="record-modal" hidden>
+<div class="modal phone-hide" id="record-modal" hidden>
   <div class="modal-card">
     <h3>正在录音</h3>
     <div class="rec-timer" id="rec-timer">00:00</div>
@@ -229,12 +239,12 @@
       <input id="nl-title" type="text" placeholder="如：数据结构 · 二叉树的遍历" spellcheck="false">
     </div>
 
-    <div class="field">
+    <div class="field phone-hide">
       <label for="nl-extra">提示词 <span class="hint">（空白即默认）</span></label>
       <textarea id="nl-extra" rows="3" spellcheck="false" placeholder="如：这是法学课，请把法条编号写全；重点用【】标出"></textarea>
     </div>
 
-    <div class="grid2">
+    <div class="grid2 phone-hide">
       <div class="field">
         <label for="nl-style">笔记风格</label>
         <select id="nl-style">
@@ -266,7 +276,7 @@
 </div>
 
 <!-- ============ 设置 ============ -->
-<div class="modal" id="settings-modal" hidden>
+<div class="modal phone-hide" id="settings-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
       <h3><svg class="i"><use href="#i-sliders"/></svg>设置</h3>
@@ -518,7 +528,8 @@
     · 设置底部「请人家喝奶茶」按钮，想看才点
   自动弹的时候把「下次再说」写成「先看看别处」，手动打开时那句不显示。
 -->
-<div class="modal" id="donate-modal" hidden>
+<!-- ============ 打赏 ============ -->
+<div class="modal phone-hide" id="donate-modal" hidden>
   <div class="modal-card">
     <div class="modal-head">
       <h3><svg class="i"><use href="#i-coffee"/></svg>请人家喝杯奶茶</h3>

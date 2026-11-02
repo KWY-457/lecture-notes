@@ -1548,6 +1548,10 @@ async function handleApi(req, res, u) {
       arch: process.arch,
       host: HOST,
       port: PORT,
+      // 这个请求是不是本机发出来的。手机（局域网）那边靠它决定「只留上传」：
+      // 用 urls 长度也能推出来，但那是副作用式的推断 —— 哪天 urls 的语义变了
+      // （比如给局域网也回地址），手机就会突然变回完整界面。直接说清楚更稳。
+      local,
       ...(local ? { dataDir: DATA_DIR } : {}),
       urls: local ? localUrls() : [],
     });

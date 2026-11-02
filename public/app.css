@@ -178,6 +178,40 @@ a { color: var(--brand); text-underline-offset: 2px; }
 .icon-btn.tiny { width: 26px; height: 26px; font-size: 13px; }
 .icon-btn.tiny .i { width: 14px; height: 14px; }
 .only-mobile { display: none; }
+/* 局域网来的（手机、另一台电脑）只留上传。
+   ---------------------------------------------------------------
+   老大的原话：「手机只负责上传录音，只保留上传功能，其他的也没什么用
+   吧，其他功能在电脑上弄，那就去掉，正好手机屏幕小也显得简洁一些」。
+
+   注意这里**不是**用宽度断点判断的。宽度判断不了「是不是手机」：把桌面
+   浏览器窗口拉窄一点就会掉进手机版，而那台机器其实什么都能干（转写、
+   导出、改设置全都打得通），平白削掉一半功能。真正的判据是「这个请求是
+   不是从本机发出来的」—— 服务端 /health 回的 local 字段，见 app.js 的
+   applyRemoteMode()。手机上不管横屏竖屏一律精简，桌面上把窗口拉成一条
+   缝也还是完整功能。
+
+   `.only-remote` 反着来：只在手机上出现的那段说明文字用它。 */
+body.remote .phone-hide { display: none !important; }
+/* 只在手机 / 只在电脑出现的那两段文案。用 revert 而不是写死 inline：
+   同一个类既挂在 <span> 上也挂在 <ol> 上，写死 display:inline 会把列表
+   压成一行。revert 交还给浏览器默认值，span 还是行内、ol 还是块。 */
+.only-remote { display: none; }
+body.remote .only-remote { display: revert; }
+body.remote .pc-only { display: none; }
+
+/* 手机上侧栏那几行还要再收一遍：
+   · 置顶 / 删除 / 笔记设置这三个操作全是「在电脑上整理」时干的事，手机传完
+     就走，用不到；而且它们平时靠 :hover 才冒出来，触屏上本来就点不出来。
+   · 列表本身留着 —— 传完能看见「刚才那条上去了」是唯一的反馈。 */
+body.remote .li-actions,
+body.remote .li-edit { display: none; }
+body.remote .side-foot { display: none; }
+/* 手机这一屏只有「传文件」一个动作，空状态的那张卡片就是整个页面。
+   桌面版靠 min-height:70vh 把它摆在中间偏上；手机上变成顶部对齐，
+   免得按钮被顶到屏幕下半截、一进来还要滑一下才看得见。 */
+body.remote .empty { min-height: 0; place-items: start center; padding-top: 6vh; }
+body.remote .empty-actions { margin-bottom: 20px; }
+body.remote .empty-card > p { margin-bottom: 16px; }
 
 /* ---------- 布局 ---------- */
 .layout { display: grid; grid-template-columns: 296px 1fr; height: calc(100vh - 56px); }

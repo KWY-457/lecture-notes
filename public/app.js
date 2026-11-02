@@ -35,6 +35,9 @@ const state = {
   // 存储位置的状态缓存，moveStorage 里判断「是不是已经改回默认」要用。
   // 和 sys.storage 是同一份数据，单独留一个引用只为少写几层可选链。
   storage: null,
+  // 这个页面是不是「手机 / 另一台设备通过局域网打开」的。true 时只留上传，
+  // 其余功能全藏掉。由 applyRemoteMode() 按 /health 的 local 字段定。
+  remote: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -520,6 +523,12 @@ function setBatchMode(on) {
 
 /* ============================ 打开一条录音 ============================ */
 async function openLecture(id) {
+  // 手机模式没有详情页（转写/笔记/导出全在电脑上做），从任何入口点进来都拦住。
+  // 不拦的话点一下会白屏 —— 详情那块 DOM 还在，但里面的按钮全被 CSS 藏了。
+  if (state.remote) {
+    toast('这条已经传到电脑上了。转写和生成笔记请在电脑上打开「讲义笔记」。', '', 6000);
+    return;
+  }
   const data = await api('/lectures/' + id);
   state.current = data;
   $('empty-state').hidden = true;
@@ -1577,6 +1586,41 @@ function openNewLecture(opts = {}) {
   });
 }
 
+/**
+ * 手机模式（局域网打开）—— 只留上传。
+ *
+ * 老大的原话：「手机只负责上传录音，只保留上传功能，其他的也没什么用吧，
+ * 其他功能在电脑上弄，那就去掉」。
+ *
+ * 判据是「这个请求是不是本机发出来的」，不是屏幕宽度：把桌面窗口拉窄
+ * 也还是本机，转写/导出/设置全都打通，不该被削掉。而手机上不管横屏竖屏
+ * 一律精简。
+ *
+ * 服务端 /health 的 local 字段是唯一的真相来源（手机访问时那边恒为 false）。
+ * 万一 /health 没拿到（离线、启动早期），退回「宽度 + 看不到本机地址」两条
+ * 都成立才认定，宁可少砍不要多砍 —— 判错了顶多是手机上多几个用不了的按钮，
+ * 反过来则是电脑上莫名其妙少一半功能。
+ */
+function applyRemoteMode(health) {
+  let remote = false;
+  if (health && typeof health.local === 'boolean') {
+    remote = !health.local;
+  } else {
+    const narrow = window.matchMedia?.('(max-width: 860px)')?.matches === true;
+    const noLocalUrl = !window.location.hostname || window.location.hostname !== '127.0.0.1';
+    remote = narrow && noLocalUrl;
+  }
+  state.remote = remote;
+  document.body.classList.toggle('remote', remote);
+  if (remote) document.title = '上传课堂录音 · 讲义笔记';
+  return remote;
+}
+
+/** 手机上传完只提示一句、刷新列表，不跳详情 —— 详情里全是手机上干不了的事 */
+function toastUploadedOnPhone(title) {
+  toast(`已上传：${title}。去电脑上打开「讲义笔记」就能转写和生成笔记了。`, 'ok', 6000);
+}
+
 /** 把 notePrefs 写进这条录音的 meta（服务端 PATCH 允许任意字段） */
 async function saveNotePrefs(id, notePrefs) {
   if (!notePrefs) return;
@@ -1651,8 +1695,12 @@ async function handleFiles(files) {
   const firstTitle = list[0].name.replace(/\.[^.]+$/, '').slice(0, 80);
   const pick = await openNewLecture({
     title: firstTitle,
-    subtitle:
-      list.length > 1
+    // 手机上只问名字，不问笔记设置（那几项在手机弹窗里是藏起来的，见 .phone-hide）
+    subtitle: state.remote
+      ? list.length > 1
+        ? `把这 ${list.length} 个文件传到电脑上。起个名字就行，笔记怎么写在电脑上定。`
+        : '把这条录音传到电脑上。起个名字就行，笔记怎么写在电脑上定。'
+      : list.length > 1
         ? `这次要导入 ${list.length} 个文件。笔记风格和提示词会套用到这一批全部；录音名仍按各文件名走。`
         : '',
   });
@@ -1671,9 +1719,12 @@ async function handleFiles(files) {
       const meta = await uploadBlob(f, f.name, { title, duration }, (p) =>
         progress(true, `正在上传 ${f.name}… ${Math.round(p * 100)}%`, p * 100)
       );
-      await saveNotePrefs(meta.id, pick.notePrefs);
+      // 手机上没弹那两项设置（弹窗里是藏起来的），存回去的会是默认值 ——
+      // 这会覆盖用户在电脑上给这条录音设过的偏好。所以只在非手机模式存。
+      if (!state.remote) await saveNotePrefs(meta.id, pick.notePrefs);
       last = meta;
-      toast(`已导入：${title}`, 'ok');
+      if (state.remote) toastUploadedOnPhone(title);
+      else toast(`已导入：${title}`, 'ok');
     } catch (e) {
       toast(`导入失败（${f.name}）：${e.message}`, 'err', 6000);
     }
@@ -1683,7 +1734,9 @@ async function handleFiles(files) {
   // （不能因为刚上传完就把正在转写的那条的进度栏一起关掉）。
   renderJobProgress();
   await loadLectures();
-  if (last) openLecture(last.id);
+  // 手机上不跳详情：那边只有一条录音的转写/笔记/导出，全都要在电脑上做，
+  // 跳过去等于把人引到一个只有灰按钮的页面。留在首屏继续传下一个更合理。
+  if (last && !state.remote) openLecture(last.id);
 }
 
 /** 生成一段静音 WAV，用于示例（让播放器和时间轴能真实工作） */
@@ -3598,6 +3651,12 @@ function closeDetail() {
 
 /** 从地址栏 hash 打开对应录音；hash 为空则回到首屏 */
 async function openFromHash() {
+  // 手机上不打开详情页：那边只有转写 / 笔记 / 导出，全都要在电脑上做。
+  // 连地址带过来也一样（比如电脑上复制了链接发到手机看），一律回上传页。
+  if (state.remote) {
+    closeDetail();
+    return false;
+  }
   const m = location.hash.match(/^#\/l\/([A-Za-z0-9_-]{6,64})$/);
   if (m) {
     try {
@@ -3640,6 +3699,8 @@ async function boot() {
           ]);
     state.config = cfg.config;
     if (agreement?.ok) state.agreement = agreement;
+    // 先定「是不是手机」再动界面：后面所有渲染分支都看这个。
+    applyRemoteMode(health);
     if (health) {
       state.appVersion = health.version || '';
       const lan = health.urls.filter((u) => !u.includes('127.0.0.1'));
@@ -3674,8 +3735,11 @@ async function boot() {
   // 放在最后、并且不 await 阻塞其他初始化：录音列表已经能看了，协议弹窗盖在上面而已。
   // 局域网（手机）上服务端不会给正文，也就不该在这边弹 —— accepted 由服务端算，那边会是 false，
   // 但手机用户点不了「同意」（接口只允许本机），弹出来只会让人卡住，所以按 host 排除。
+  // 协议弹窗：手机上不弹（服务端不给正文，点了「同意」也是 403）。
+  // 手机上唯一能做的事是上传，让一个点了没反应的协议窗挡在中间没有意义；
+  // 协议是电脑那边签的，手机上不签也不影响上传。
   let agreementShown = false;
-  if (state.agreement && state.agreement.text && !state.agreement.accepted) {
+  if (!state.remote && state.agreement && state.agreement.text && !state.agreement.accepted) {
     let snoozed = '';
     try {
       snoozed = sessionStorage.getItem('ln-agree-snoozed') || '';
@@ -3701,6 +3765,8 @@ async function boot() {
  *   · 弹过之后把新的 bootId 写回去 —— 再刷新页面就变成「见过」，不会重复弹
  */
 async function maybeShowDonate() {
+  // 手机（局域网）上不弹打赏：那是给电脑用户看的，手机上弹出来只会挡着上传按钮。
+  if (state.remote) return;
   try {
     let seen = '';
     try {

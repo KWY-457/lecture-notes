@@ -178,7 +178,12 @@ const home = await cdp.eval(`JSON.stringify({
   title: document.title,
   emptyVisible: !document.getElementById('empty-state').hidden,
   listCount: document.querySelectorAll('.lecture-item').length,
-  steps: document.querySelectorAll('.steps li').length,
+  steps: document.querySelectorAll('.steps:not(.only-remote) li').length,
+  stepsRemote: document.querySelectorAll('.steps.only-remote li').length,
+  stepsRemoteShown: [...document.querySelectorAll('.steps.only-remote')].some((n) => {
+    const r = n.getBoundingClientRect();
+    return getComputedStyle(n).display !== 'none' && r.height > 0;
+  }),
   lanHint: (document.getElementById('lan-hint')||{}).textContent || '',
   cols: getComputedStyle(document.querySelector('.layout')).gridTemplateColumns,
   bodyWidth: document.body.clientWidth
@@ -188,6 +193,8 @@ check('页面标题正确', H.title.includes('讲义笔记'), H.title);
 check('空状态引导可见', H.emptyVisible === true);
 check('课程列表渲染出条目', H.listCount >= 1, `count=${H.listCount}`);
 check('使用说明步骤渲染', H.steps === 4, `steps=${H.steps}`);
+// 手机版那三步是给局域网来的访客看的，本机打开时必须藏着（否则两套说明叠在一起）
+check('手机版说明在本机是藏着的', H.stepsRemote === 3 && H.stepsRemoteShown === false, `remoteSteps=${H.stepsRemote} shown=${H.stepsRemoteShown}`);
 check('局域网地址已显示', /http:\/\/\d/.test(H.lanHint) || H.lanHint.length > 0, H.lanHint.slice(0, 80));
 check('双栏布局生效', /px/.test(H.cols), H.cols);
 check('首页无控制台报错', consoleErrors.length === 0, consoleErrors.join(' | '));
