@@ -38,12 +38,18 @@
  *                 'pro'    偏贵·更好   贵一档，归纳更细
  *   recommended 作者推荐（true 才显示）。**不是档位，是「我试下来最常用的那个」的背书**，
  *               所以单独一个字段，别塞进 tier 里 —— 一个模型可以既是 pro 又被推荐。
+ *               ⚠ 2026-11-03：本地转写那四档已经全部撤掉这个标签（老大要求），
+ *               现在只剩云端笔记里的 DeepSeek-V3 还在用。
  *   priceNote   只放「模型多重 / 要下多大」这类硬事实，见下面那条 ⚠
  *   qualityNote 一句话说明它好在哪 / 快不快
- *   speedNote   **只给本地转写模型用**：实测的「相对实时倍数」，界面上会单独占一行小字。
+ *   reqNote     **只给本地转写模型用**：推荐配置（要不要显卡、内存多大），界面单独一行小字。
  *               为什么不塞进 qualityNote：那一行限 14 字、只讲质量（见下），
- *               而「2.97× 实时 / 一小时课约 20 分钟」是另一维信息，两者挤一起谁都读不清。
- *               数据来源与测法写在文件末尾的注释里。
+ *               而「独立显卡 6GB+ · 内存 16GB」是另一维信息，两者挤一起谁都读不清。
+ *               收的都是「跑起来舒服」的配置，不是「刚好能启动」的下限 ——
+ *               下限没实测过，不敢写。
+ *               （2026-11-03 老大把这一行从「实测耗时」改成「配置推荐」，原话：
+ *                「底下的小字就不要标速度了，标出配置推荐，什么GPU，内存多少」。
+ *                耗时数据仍然留在 asrModels 上方的注释里，别删。）
  *   cpuDtype / gpuDtype
  *               **只给本地转写模型用**：这个模型在 CPU(WASM) / 显卡(WebGPU) 上该用哪份权重。
  *               cpuDtype 不写默认 'q8'，gpuDtype 不写默认 'fp16'。
@@ -277,15 +283,11 @@ export const PROVIDERS = [
         tier: 'free',
         priceNote: '172MB',
         qualityNote: '较快，能读',
-        speedNote: '一小时课约 20 分钟',
+        reqNote: '不用显卡 · 内存 4GB',
         cpuDtype: 'q8',
         // GPU 上 fp16 是乱码（2.7 秒「跑完」120 秒音频，根本没在编码），q8 又只有 0.50×
         // 远不如 CPU 的 2.97× —— 这个模型在显卡上跑不了，null 让 worker 直接用 CPU。
         gpuDtype: null,
-        // 第一张 = 默认 = 推荐给大多数人的那档。
-        // 没显卡的电脑占绝大多数，选 turbo 等于默认让他等三小时；
-        // 有显卡的人换 turbo 只多一次下载，反而不坑。
-        recommended: true,
       },
       {
         id: 'onnx-community/whisper-tiny',
@@ -293,7 +295,7 @@ export const PROVIDERS = [
         tier: 'free',
         priceNote: '96MB',
         qualityNote: '最快，精度一般',
-        speedNote: '一小时课约 14 分钟',
+        reqNote: '不用显卡 · 内存 2GB',
         cpuDtype: 'q8',
         gpuDtype: 'fp16',
       },
@@ -303,7 +305,7 @@ export const PROVIDERS = [
         tier: 'free',
         priceNote: '521MB',
         qualityNote: '准确与速度均衡',
-        speedNote: '一小时课约 44 分钟',
+        reqNote: '不用显卡 · 内存 4GB',
         cpuDtype: 'q8',
         // 同上：GPU/fp16 输出空、GPU/q8 只有 0.17×，CPU 才是它的正确位置
         gpuDtype: null,
@@ -313,9 +315,8 @@ export const PROVIDERS = [
         label: 'large-v3-turbo',
         tier: 'free',
         priceNote: '1.9GB',
-        qualityNote: '最准，需显卡',
-        // turbo 在 GPU 上是 7.73×，一小时课约 8 分钟；纯 CPU 只有 0.30×
-        speedNote: '有显卡约 8 分钟',
+        qualityNote: '最准，用显卡时很快',
+        reqNote: '独立显卡 6GB+ · 内存 16GB',
         cpuDtype: 'q8',
         gpuDtype: 'fp16',
       },
@@ -336,7 +337,7 @@ export const PROVIDERS = [
     setup: [
       '转写：什么都不用装。第一次转写会自动从 hf-mirror 下载 Whisper 模型，下过一次就留在本地。',
       '笔记：设置 → ⑥ 环境自检 →「部署本地模型」，一键装好 llama-server 和 Qwen2.5 共 4.4GB。',
-      '不知道选哪个转写模型就看卡片上的耗时：tiny 最快但错字多，base 最省事，有独立显卡才建议选 large-v3-turbo。',
+      '不知道选哪个转写模型就看卡片上最后一行：不要显卡的 base / small 大多数电脑都能跑，tiny 更快但错字多，large-v3-turbo 要有独立显卡才划算。',
     ],
   },
 

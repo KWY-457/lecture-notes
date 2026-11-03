@@ -2137,15 +2137,20 @@ function renderModelPicker(kind) {
     const nameRow = document.createElement('span');
     nameRow.className = 'model-name';
     nameRow.textContent = spec.label || spec.id;
-    if (tier) {
+    // 本地转写那四档不贴标签（老大 2026-11-03：「这个就不用打标签了去掉标签」）。
+    // 理由：四档全是「零成本」，同一个徽章重复四遍等于没说；而它们真正的差别
+    // ——要不要显卡、内存多大——已经由下面那行配置推荐讲清了。
+    // 云端的档位徽章保留：那里 free / 便宜·够用 / 便宜·好用 / 偏贵·更好 四档
+    // 确实在区分真实的钱和质量，撤掉等于把当初为「能比价」加的东西又拆了。
+    if (tier && kind !== 'local-whisper') {
       const badge = document.createElement('span');
       badge.className = 'tier tier-' + spec.tier;
       badge.textContent = tier.label;
       nameRow.appendChild(badge);
     }
     // 「作者推荐」是背书，不是档位，所以单独一个小标签跟在档位后面。
-    // 老大 2026-10-29 点名要的（当时推荐的是 DeepSeek-V3）。
-    if (spec.recommended) {
+    // 老大 2026-10-29 点名要的（当时推荐的是 DeepSeek-V3）。本地转写不贴。
+    if (spec.recommended && kind !== 'local-whisper') {
       const rec = document.createElement('span');
       rec.className = 'rec';
       rec.textContent = '作者推荐';
@@ -2163,14 +2168,17 @@ function renderModelPicker(kind) {
       main.appendChild(sub);
     }
 
-    // 第三行只给本地转写模型：实测耗时。
+    // 第三行只给本地转写模型：推荐配置（要不要显卡、内存多大）。
     // 为什么不并进上一行：那一行限 14 字、只讲质量（老大定的），
-    // 而「一小时课约 20 分钟」是另一维的信息，两者挤一起谁都读不清。
-    // 这行是选模型时最想知道的数字 —— 老大要的就是「标注性能参考，方便用户选择」。
-    if (spec.speedNote) {
+    // 而「独立显卡 6GB+ · 内存 16GB」是另一维的信息，两者挤一起谁都读不清。
+    // 老大 2026-11-03 把这一行从「实测耗时」改成「配置推荐」，原话：
+    // 「底下的小字就不要标速度了，标出配置推荐，什么GPU，内存多少」。
+    // 耗时数据没丢，留在 providers.js 里每档上方那段实测表注释中。
+    const noteRow = spec.reqNote || spec.speedNote;
+    if (noteRow) {
       const spd = document.createElement('span');
       spd.className = 'model-speed';
-      spd.textContent = spec.speedNote;
+      spd.textContent = noteRow;
       main.appendChild(spd);
     }
 
@@ -2199,10 +2207,14 @@ function renderModelPicker(kind) {
   const oname = document.createElement('span');
   oname.className = 'model-name';
   oname.textContent = '其他（自己填）';
-  const obadge = document.createElement('span');
-  obadge.className = 'tier tier-custom';
-  obadge.textContent = '自定义';
-  oname.appendChild(obadge);
+  // 本地那组连「其他」卡也不贴徽章，否则四张光卡后面挂一个有徽章的，
+  // 反而像「这张才是正品」。名字里已经写了「自己填」，不缺这个提示。
+  if (kind !== 'local-whisper') {
+    const obadge = document.createElement('span');
+    obadge.className = 'tier tier-custom';
+    obadge.textContent = '自定义';
+    oname.appendChild(obadge);
+  }
   omain.appendChild(oname);
   const osub = document.createElement('span');
   osub.className = 'model-sub';

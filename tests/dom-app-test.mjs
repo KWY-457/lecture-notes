@@ -669,11 +669,36 @@ if (lecture) {
   check('点「其他」展开手填框', doc.getElementById('asr-model-custom').hidden === false, nameOf(otherCard));
   doc.getElementById('asr-model-custom').hidden = true;
 
-  // 本地候选也走同一套：切到 local 才有卡片，且默认选中 turbo
+  // 本地候选也走同一套：切到 local 才有卡片。
   provSel.value = 'local';
   fire(provSel, 'change');
-  check('切到本地后本地模型有卡片', cardOf('local-model-list').length >= 2, `${cardOf('local-model-list').length} 张`);
-  check('本地模型默认选中 turbo', /turbo/i.test(nameOf(onCard('local-model-list'))), nameOf(onCard('local-model-list')));
+  const localCards = cardOf('local-model-list');
+  // 最后一张是「其他（自己填）」，不是预设模型，下面的断言都把它排除掉。
+  const presetCards = localCards.slice(0, -1);
+  check('切到本地后本地模型有卡片', localCards.length >= 2, `${localCards.length} 张`);
+  // 选中项必须就是配置里存的那个模型。不能断言「一定是 base」——
+  // 出厂默认是 base，但老配置里存着 turbo 的话服务端不会覆盖（这是有意的：
+  // 用户自己选过的模型不该被升级悄悄改掉）。这条断言守的是「选中态没有撒谎」。
+  const localCfg = doc.getElementById('s-local-model').value;
+  check('本地模型的选中项就是配置里存的那个', onCard('local-model-list')?.dataset.modelId === localCfg, `${nameOf(onCard('local-model-list'))} / ${localCfg}`);
+  // 老大 2026-11-03 原话：「这个就不用打标签了去掉标签」。
+  // 本地四档全是「零成本」，同一个徽章重复四遍等于没说；
+  // 它们真正的差别（要不要显卡、内存多大）由下面那行配置推荐来讲。
+  check(
+    '本地转写卡片不贴档位徽章',
+    presetCards.every((c) => !c.querySelector('.tier') && !c.querySelector('.rec')),
+    presetCards.map((c) => c.querySelector('.tier')?.textContent || '').join(',')
+  );
+  check(
+    '本地转写卡片写了推荐配置',
+    presetCards.every((c) => /显卡|内存/.test(c.querySelector('.model-speed')?.textContent || '')),
+    presetCards.map((c) => c.querySelector('.model-speed')?.textContent || '(空)').join(' | ')
+  );
+  check(
+    '云端转写卡片仍然有档位徽章',
+    cardOf('asr-model-list').every((c) => !!c.querySelector('.tier')),
+    ''
+  );
   provSel.value = 'siliconflow';
   fire(provSel, 'change');
 

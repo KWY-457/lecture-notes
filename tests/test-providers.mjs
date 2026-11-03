@@ -169,20 +169,28 @@ section('作者推荐');
 // 推荐不是档位，是背书，所以是独立字段（一个模型可以既是 pro 又被推荐）。
 check('DeepSeek-V3 标了作者推荐', modelsFor('siliconflow', 'llm').some((m) => m.id === 'deepseek-ai/DeepSeek-V3' && m.recommended === true));
 check('推荐的模型必须同时有档位', modelsFor('siliconflow', 'llm').filter((m) => m.recommended).every((m) => !!m.tier));
-// 2026-11-03 起转写侧也有推荐了：本地 Whisper 的 base 是「大多数机器都跑得动、
-// 质量也够用」的那一档，标出来省得用户在四张卡里猜。
-// 但仍然只有**本地**这一家标 —— 云端转写的选择取决于用户买的套餐，作者不该替他背书。
-check('推荐只出现在本地的转写里', PROVIDERS.every((p) => modelsFor(p.id, 'asr').every((m) => !m.recommended || p.id === 'local')));
+// 2026-11-03 起本地转写那四档也撤掉了推荐标签（老大 m29061：「这个就不用打标签了
+// 去掉标签」）。所以现在全项目只剩云端笔记里的推荐，且只在硅基流动那一家。
+check('推荐只出现在云端笔记里', PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => !m.recommended || (p.id === 'siliconflow' && k === 'llm')))));
 
-/* --------------------- 本地转写模型的实测性能标注 --------------------- */
-section('本地转写模型的性能标注');
+/* --------------------- 本地转写模型的配置推荐 --------------------- */
+section('本地转写模型的配置推荐');
 // 老大 2026-11-03 原话：「对于本地转写的模型，可以多弄几个，对应电脑性能从低到高
 // 都有适配，在不同模型后面标注性能参考，方便用户选择」。
-// 所以每个本地转写模型都必须带 speedNote（实测耗时），否则「方便选择」就是空话。
+// 当天晚上他又改了口径（m29061）：「底下的小字就不要标速度了，标出配置推荐，
+// 什么GPU，内存多少，这个就不用打标签了去掉标签」。
+// 所以现在每个本地转写模型带的是 reqNote（推荐配置），不再是 speedNote（实测耗时）。
+// 耗时数据没删，留在 providers.js 里每档上方那段实测表注释中。
 const localAsr = modelsFor('local', 'asr');
 check('本地转写有 4 档可选', localAsr.length === 4, localAsr.map((m) => m.label).join(','));
-check('每档都标了实测耗时', localAsr.every((m) => !!m.speedNote), '缺 speedNote 的：' + localAsr.filter((m) => !m.speedNote).map((m) => m.label).join(','));
+check('每档都标了推荐配置', localAsr.every((m) => !!m.reqNote), '缺 reqNote 的：' + localAsr.filter((m) => !m.reqNote).map((m) => m.label).join(','));
 check('每档都写清了模型多大', localAsr.every((m) => !!m.priceNote), '缺 priceNote 的：' + localAsr.filter((m) => !m.priceNote).map((m) => m.label).join(','));
+// 配置推荐得真的说到显卡和内存，否则「什么GPU，内存多少」这句要求就没满足。
+check('配置推荐里提到了显卡', localAsr.every((m) => /显卡|GPU/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
+check('配置推荐里提到了内存', localAsr.every((m) => /内存/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
+// 本地转写不再打「零成本」档位徽章和「作者推荐」标签（老大 m29061：「这个就不用打标签了去掉标签」）。
+// 但 tier 字段不能删 —— 排序（sortedModels）还靠它。只要求别标 recommended。
+check('本地转写不再标作者推荐', localAsr.every((m) => !m.recommended), localAsr.filter((m) => m.recommended).map((m) => m.label).join(','));
 // medium 在 CPU 与 GPU 上都跑不起来（CPU 报 Error 1267168960 内存不足、GPU 报错），
 // 留着就是给用户埋坑，所以整条删掉。
 check('跑不起来的 medium 已剔除', !localAsr.some((m) => /medium/.test(m.id)), localAsr.map((m) => m.id).join(','));
@@ -194,8 +202,8 @@ check('知道自己在显卡上跑不了的两个模型标了 null', forcedCpu.l
 const gpuOk = localAsr.filter((m) => m.gpuDtype && m.gpuDtype !== null).map((m) => m.label);
 check('能用显卡的两个模型给了 fp16', gpuOk.length === 2 && /tiny/.test(gpuOk.join()) && /turbo/.test(gpuOk.join()), gpuOk.join(','));
 check('每个本地转写模型都声明了 CPU 精度', localAsr.every((m) => !!m.cpuDtype));
-// speedNote 是给买家看的，不能出现「相对实时倍数」这种只有作者看得懂的写法
-check('耗时写成人话（不出现「×实时」这类术语）', localAsr.every((m) => !/[×x]\s*实时|RTF|rtf/.test(m.speedNote)), localAsr.map((m) => m.speedNote).join(' | '));
+// reqNote 是给买家看的，不能出现「相对实时倍数」这种只有作者看得懂的写法
+check('配置推荐写成人话（不出现倍数/术语）', localAsr.every((m) => !/[×x]\s*实时|RTF|rtf|\d+\s*倍/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
 
 /* ------------------------------ 默认模型 ------------------------------ */
 section('默认模型');

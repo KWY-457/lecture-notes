@@ -913,15 +913,25 @@ body.remote .empty-card > p { margin-bottom: 16px; }
   transition: border-color .12s var(--ease), border-width .12s var(--ease);
 }
 .model-item.on .model-dot { border-color: var(--brand); border-width: 4.5px; }
-.model-main { flex: 1 1 auto; min-width: 0; }
+/* 卡片右半边是「三行字叠起来」，所以这里必须是 flex 列。
+   ⚠ 2026-11-03 栽过：这里原来只写了 `flex: 1 1 auto`，而 .model-sub / .model-speed
+   都是 <span>（行内元素）—— 兄弟行内元素会挤在同一行里，于是
+   「172MB · 较快，能读」和「不用显卡 · 内存 4GB」连成了一行
+   「172MB · 较快，能读不用显卡 · 内存 4GB」，看着像一句话。
+   （行内元素上的 margin-top 也不生效，所以连间距都看不出来。）
+   改成 flex 列之后三行各归各的，以后再加第四行也不会串。 */
+.model-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .model-name {
   font-size: 13px; font-weight: 600; display: flex; align-items: center;
   gap: 7px; flex-wrap: wrap; word-break: break-all; letter-spacing: -.005em;
 }
 .model-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
-/* 本地转写模型的实测耗时（「一小时课约 20 分钟」）。
-   单独一行、等宽数字、用主色弱化版 —— 它和上面那行「172MB · 较快，能读」是两回事：
-   那行说质量，这行说时间。老大 2026-11-03 要的就是这个数字，好让人按自己机器挑。
+/* 本地转写模型的推荐配置（「不用显卡 · 内存 4GB」「独立显卡 6GB+ · 内存 16GB」）。
+   单独一行、用主色弱化版 —— 它和上面那行「172MB · 较快，能读」是两回事：
+   那行说体积与质量，这行说要什么机器。
+   2026-11-03 之前这行是实测耗时（「一小时课约 20 分钟」），老大当晚改成了配置推荐
+   （原话：「底下的小字就不要标速度了，标出配置推荐，什么GPU，内存多少」）。
+   耗时数据没丢，留在 public/providers.js 里每档上方那段实测表注释中。
    不给它加边框/底色：卡片本身已经是一层，再套一层会显得比标题还重。 */
 .model-speed {
   font-size: 11px; color: var(--brand); margin-top: 3px; line-height: 1.4;
