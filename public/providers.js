@@ -40,6 +40,18 @@
  *               所以单独一个字段，别塞进 tier 里 —— 一个模型可以既是 pro 又被推荐。
  *   priceNote   只放「模型多重 / 要下多大」这类硬事实，见下面那条 ⚠
  *   qualityNote 一句话说明它好在哪 / 快不快
+ *   speedNote   **只给本地转写模型用**：实测的「相对实时倍数」，界面上会单独占一行小字。
+ *               为什么不塞进 qualityNote：那一行限 14 字、只讲质量（见下），
+ *               而「2.97× 实时 / 一小时课约 20 分钟」是另一维信息，两者挤一起谁都读不清。
+ *               数据来源与测法写在文件末尾的注释里。
+ *   cpuDtype / gpuDtype
+ *               **只给本地转写模型用**：这个模型在 CPU(WASM) / 显卡(WebGPU) 上该用哪份权重。
+ *               cpuDtype 不写默认 'q8'，gpuDtype 不写默认 'fp16'。
+ *               **gpuDtype 显式写 null 表示「这个模型在显卡上跑不了」** → worker 会直接用 CPU。
+ *               为什么需要它：实测 WebGPU + fp16 只对 tiny 和 turbo 有效 ——
+ *               base 输出乱码、small 输出空（都在 2 秒内「跑完」，让人误以为飞快）；
+ *               而这两个模型在 GPU 上换成 q8 又慢到 0.17×（CPU 是 1.36×）。
+ *               所以它们干脆走 CPU：改由模型自己声明，比 worker 里按设备一刀切可靠。
  *
  *   ⚠ 这两个 Note 会被原样铺到卡片第二行，**不要写括号**（老大特意要求删掉）：
  *     括号里的补充说明在窄屏上会被折成第三行，反而把档位这个关键区别挤没了。
@@ -240,32 +252,72 @@ export const PROVIDERS = [
     tag: '离线',
     // 转写没有地址：真正的转写在浏览器里跑（public/worker-asr.js），服务端不代理
     asrUrl: '',
-    asrModel: 'onnx-community/whisper-large-v3-turbo',
+    asrModel: 'onnx-community/whisper-base',
+    // ★ 2026-11-03 实测重排（老大 m28311：要按电脑性能从低到高都有适配、每档标注性能参考）
+    //
+    // 测法：录音「高数」(1e86e685, 2592 秒) 的第 300~360 秒，走产品真实链路
+    // transcribeLocal()，CPU(WASM/q8) 与 GPU(WebGPU) 各跑一遍。脚本 _scratch/bench-models.mjs。
+    // 数字是「相对实时倍数」= 音频秒数 / 转写秒数，越大越快。
+    //
+    // ┌ 模型    体积(q8)  CPU    GPU/fp16   实测结果
+    // │ tiny     96MB    4.22×   11.21×    都能跑，但错字明显（「秋节」=球阶、「显示机会」=显示结果）
+    // │ base    172MB    2.97×   乱码       GPU 上 2.7 秒跑完 120 秒音频 —— 根本没在编码
+    // │ small   521MB    1.36×   空输出     同上，1.6 秒跑完，一个字都不吐
+    // │ medium  1.5GB    报错    报错       CPU 报 Error 1267168960（内存不足），GPU 也报错 —— 整条删掉
+    // │ turbo   1.9GB    0.30×    7.73×     有显卡时最好用；纯 CPU 一小时课要三小时多
+    // └
+    //
+    // 因此只留四档，medium 整条删除：它在两种设备上都跑不起来，留着就是给用户埋坑。
+    // 默认值也从 turbo 改成 base —— 没显卡的电脑占绝大多数，选 turbo 等于默认让他等三小时。
+    // 有显卡的用户换 turbo 只多一次下载，反而不会被默认值坑。
     asrModels: [
+      {
+        id: 'onnx-community/whisper-base',
+        label: 'base',
+        tier: 'free',
+        priceNote: '172MB',
+        qualityNote: '较快，能读',
+        speedNote: '一小时课约 20 分钟',
+        cpuDtype: 'q8',
+        // GPU 上 fp16 是乱码（2.7 秒「跑完」120 秒音频，根本没在编码），q8 又只有 0.50×
+        // 远不如 CPU 的 2.97× —— 这个模型在显卡上跑不了，null 让 worker 直接用 CPU。
+        gpuDtype: null,
+        // 第一张 = 默认 = 推荐给大多数人的那档。
+        // 没显卡的电脑占绝大多数，选 turbo 等于默认让他等三小时；
+        // 有显卡的人换 turbo 只多一次下载，反而不坑。
+        recommended: true,
+      },
+      {
+        id: 'onnx-community/whisper-tiny',
+        label: 'tiny',
+        tier: 'free',
+        priceNote: '96MB',
+        qualityNote: '最快，精度一般',
+        speedNote: '一小时课约 14 分钟',
+        cpuDtype: 'q8',
+        gpuDtype: 'fp16',
+      },
+      {
+        id: 'onnx-community/whisper-small',
+        label: 'small',
+        tier: 'free',
+        priceNote: '521MB',
+        qualityNote: '准确与速度均衡',
+        speedNote: '一小时课约 44 分钟',
+        cpuDtype: 'q8',
+        // 同上：GPU/fp16 输出空、GPU/q8 只有 0.17×，CPU 才是它的正确位置
+        gpuDtype: null,
+      },
       {
         id: 'onnx-community/whisper-large-v3-turbo',
         label: 'large-v3-turbo',
         tier: 'free',
-        priceNote: '约 1.3GB 模型',
-        // 2026-10-20 实测：本地 Whisper 几乎不吐标点，8424 字只有 39 个标点
-        // （每百字 0.47 个），同一批录音走云端 SenseVoice 是每百字 12.6~15.6 个。
-        // 差 27 倍，这不是参数没调好，是模型本身就不输出标点。
-        // 这条缺点不写进卡片（老大 2026-10-29 要求小字只讲质量）。
-        qualityNote: '本机最准，占显存',
-      },
-      {
-        id: 'Xenova/whisper-medium',
-        label: 'medium',
-        tier: 'free',
-        priceNote: '约 800MB 模型',
-        qualityNote: '较准，显存少一半',
-      },
-      {
-        id: 'Xenova/whisper-small',
-        label: 'small',
-        tier: 'free',
-        priceNote: '约 250MB 模型',
-        qualityNote: '体积最小，精度一般',
+        priceNote: '1.9GB',
+        qualityNote: '最准，需显卡',
+        // turbo 在 GPU 上是 7.73×，一小时课约 8 分钟；纯 CPU 只有 0.30×
+        speedNote: '有显卡约 8 分钟',
+        cpuDtype: 'q8',
+        gpuDtype: 'fp16',
       },
     ],
     // 笔记走本机 llama-server（helpers/setup-local-llm.ps1 一键部署）
@@ -280,11 +332,11 @@ export const PROVIDERS = [
       },
     ],
     local: true,
-    note: '录音和逐字稿完全不出本机，一分钱不花。代价：转写要下几百 MB 到 1.3GB 的 Whisper 模型、笔记要下 4.4GB 的本地大模型，都吃内存和显卡；配置一般的电脑会明显卡顿。',
+    note: '录音和逐字稿完全不出本机，一分钱不花。代价：转写要下 96MB 到 1.9GB 的 Whisper 模型、笔记要下 4.4GB 的本地大模型，都吃内存和显卡；配置一般的电脑会明显卡顿。',
     setup: [
       '转写：什么都不用装。第一次转写会自动从 hf-mirror 下载 Whisper 模型，下过一次就留在本地。',
       '笔记：设置 → ⑥ 环境自检 →「部署本地模型」，一键装好 llama-server 和 Qwen2.5 共 4.4GB。',
-      '卡得厉害就把转写模型换成 small，或者改用云端服务商。',
+      '不知道选哪个转写模型就看卡片上的耗时：tiny 最快但错字多，base 最省事，有独立显卡才建议选 large-v3-turbo。',
     ],
   },
 

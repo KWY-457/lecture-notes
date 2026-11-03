@@ -8,7 +8,7 @@ import { generateAINote, cleanTranscriptViaLLM, applyNoteHeader } from './llm.js
 import { cleanSegments } from './cleanup.js';
 import { outlineFromMarkdown as noteOutlineFromMarkdown } from './note.js';
 import { topicLeaves } from './mindmap.js';
-import { optionsFor, getProvider, modelsFor, defaultModel, estimateCost, PROVIDER_VERSION, sortedModels, TIERS } from './providers.js';
+import { optionsFor, getProvider, modelsFor, defaultModel, estimateCost, PROVIDER_VERSION, sortedModels, TIERS, modelSpec } from './providers.js';
 
 /* ============================ 全局状态 ============================ */
 const state = {
@@ -1061,9 +1061,10 @@ async function doTranscribe() {
     if (dur > 45 * 60 || est.peakBytes > 1.2 * 1024 ** 3) {
       const go = confirm(
         `这条录音约 ${mins} 分钟。\n\n` +
-          `当前模型 ${cfg.localModel} 抗噪能力最强，转写耗时较长（可能超过半小时），` +
-          `准确率优先。转写期间请保持本窗口开启。\n\n` +
+          `当前本地模型 ${cfg.localModel}，长录音会转很久（纯 CPU 上一小时课要几十分钟到几小时，` +
+          `取决于你选的模型和机器）。转写期间请保持本窗口开启。\n\n` +
           `解码阶段将额外占用约 ${memGB}GB 内存，页面可能短暂卡顿。\n\n` +
+          `嫌慢可以先在设置里换成 base 或 tiny，或者用云端转写（几十秒出稿）。\n\n` +
           `是否继续？`
       );
       if (!go) {
@@ -1108,6 +1109,10 @@ async function doTranscribe() {
         {
           model: cfg.localModel,
           device: cfg.localDevice,
+          // 模型自己的精度声明（cpuDtype / gpuDtype）要一起送进 Worker：
+          // base/small 在显卡上跑不出正确结果（见 providers.js 里那张实测表），
+          // Worker 靠 spec.gpuDtype === null 判定「这个模型别用显卡」。
+          spec: modelSpec('local', 'asr', cfg.localModel),
           cdn: cfg.cdn,
           modelHost: cfg.modelHost,
           language: cfg.language === 'auto' ? undefined : cfg.language,
@@ -2149,13 +2154,24 @@ function renderModelPicker(kind) {
     main.appendChild(nameRow);
 
     // 第二行：只放一句质量说明（价格由档位徽章负责，具体金额在教程第七章）。
-    // priceNote 现在只剩「模型多大」这类硬事实，本地 Whisper 那三张才有。
+    // priceNote 现在只剩「模型多大」这类硬事实，本地 Whisper 那几张才有。
     const subBits = [spec.priceNote, spec.qualityNote].filter(Boolean);
     if (subBits.length) {
       const sub = document.createElement('span');
       sub.className = 'model-sub';
       sub.textContent = subBits.join(' · ');
       main.appendChild(sub);
+    }
+
+    // 第三行只给本地转写模型：实测耗时。
+    // 为什么不并进上一行：那一行限 14 字、只讲质量（老大定的），
+    // 而「一小时课约 20 分钟」是另一维的信息，两者挤一起谁都读不清。
+    // 这行是选模型时最想知道的数字 —— 老大要的就是「标注性能参考，方便用户选择」。
+    if (spec.speedNote) {
+      const spd = document.createElement('span');
+      spd.className = 'model-speed';
+      spd.textContent = spec.speedNote;
+      main.appendChild(spd);
     }
 
     btn.append(dot, main);

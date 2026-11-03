@@ -236,7 +236,7 @@ export async function transcribeLocal(input, cfg, onProgress = () => {}, isCance
           sampleRate: TARGET_RATE,
           language: cfg.language,
           windowSec: 600,
-          cfg: { model: cfg.model, device: cfg.device, dtype: cfg.dtype, cdn: cfg.cdn, modelHost: cfg.modelHost },
+          cfg: { model: cfg.model, device: cfg.device, dtype: cfg.dtype, spec: cfg.spec, cdn: cfg.cdn, modelHost: cfg.modelHost },
         },
         [data.buffer]
       );

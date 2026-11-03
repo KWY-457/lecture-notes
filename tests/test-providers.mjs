@@ -169,14 +169,42 @@ section('作者推荐');
 // 推荐不是档位，是背书，所以是独立字段（一个模型可以既是 pro 又被推荐）。
 check('DeepSeek-V3 标了作者推荐', modelsFor('siliconflow', 'llm').some((m) => m.id === 'deepseek-ai/DeepSeek-V3' && m.recommended === true));
 check('推荐的模型必须同时有档位', modelsFor('siliconflow', 'llm').filter((m) => m.recommended).every((m) => !!m.tier));
-check('推荐只出现在 llm 侧（转写目前没有推荐项）', PROVIDERS.every((p) => modelsFor(p.id, 'asr').every((m) => !m.recommended)));
+// 2026-11-03 起转写侧也有推荐了：本地 Whisper 的 base 是「大多数机器都跑得动、
+// 质量也够用」的那一档，标出来省得用户在四张卡里猜。
+// 但仍然只有**本地**这一家标 —— 云端转写的选择取决于用户买的套餐，作者不该替他背书。
+check('推荐只出现在本地的转写里', PROVIDERS.every((p) => modelsFor(p.id, 'asr').every((m) => !m.recommended || p.id === 'local')));
+
+/* --------------------- 本地转写模型的实测性能标注 --------------------- */
+section('本地转写模型的性能标注');
+// 老大 2026-11-03 原话：「对于本地转写的模型，可以多弄几个，对应电脑性能从低到高
+// 都有适配，在不同模型后面标注性能参考，方便用户选择」。
+// 所以每个本地转写模型都必须带 speedNote（实测耗时），否则「方便选择」就是空话。
+const localAsr = modelsFor('local', 'asr');
+check('本地转写有 4 档可选', localAsr.length === 4, localAsr.map((m) => m.label).join(','));
+check('每档都标了实测耗时', localAsr.every((m) => !!m.speedNote), '缺 speedNote 的：' + localAsr.filter((m) => !m.speedNote).map((m) => m.label).join(','));
+check('每档都写清了模型多大', localAsr.every((m) => !!m.priceNote), '缺 priceNote 的：' + localAsr.filter((m) => !m.priceNote).map((m) => m.label).join(','));
+// medium 在 CPU 与 GPU 上都跑不起来（CPU 报 Error 1267168960 内存不足、GPU 报错），
+// 留着就是给用户埋坑，所以整条删掉。
+check('跑不起来的 medium 已剔除', !localAsr.some((m) => /medium/.test(m.id)), localAsr.map((m) => m.id).join(','));
+check('转写模型全是 whisper 系（不能是别的任务）', localAsr.every((m) => /whisper/.test(m.id)));
+// 显卡上跑不出正确结果的模型（base / small 的 fp16 是乱码或空输出）必须显式标 null，
+// 让 worker 直接走 CPU —— 否则用户会「2 秒转完」拿到一屏乱码。
+const forcedCpu = localAsr.filter((m) => m.gpuDtype === null).map((m) => m.label);
+check('知道自己在显卡上跑不了的两个模型标了 null', forcedCpu.length === 2 && /base/.test(forcedCpu.join()) && /small/.test(forcedCpu.join()), forcedCpu.join(','));
+const gpuOk = localAsr.filter((m) => m.gpuDtype && m.gpuDtype !== null).map((m) => m.label);
+check('能用显卡的两个模型给了 fp16', gpuOk.length === 2 && /tiny/.test(gpuOk.join()) && /turbo/.test(gpuOk.join()), gpuOk.join(','));
+check('每个本地转写模型都声明了 CPU 精度', localAsr.every((m) => !!m.cpuDtype));
+// speedNote 是给买家看的，不能出现「相对实时倍数」这种只有作者看得懂的写法
+check('耗时写成人话（不出现「×实时」这类术语）', localAsr.every((m) => !/[×x]\s*实时|RTF|rtf/.test(m.speedNote)), localAsr.map((m) => m.speedNote).join(' | '));
 
 /* ------------------------------ 默认模型 ------------------------------ */
 section('默认模型');
 check('硅基流动转写默认 SenseVoiceSmall', defaultModel('siliconflow', 'asr') === 'FunAudioLLM/SenseVoiceSmall');
 check('硅基流动笔记默认 Qwen2.5-7B', defaultModel('siliconflow', 'llm') === 'Qwen/Qwen2.5-7B-Instruct');
 check('OpenAI 转写默认 whisper-1', defaultModel('openai', 'asr') === 'whisper-1');
-check('局部转写默认 large-v3-turbo', defaultModel('local', 'asr') === 'onnx-community/whisper-large-v3-turbo');
+// 2026-11-03 起默认改成 base：四档里它是最稳的折中 ——
+// turbo 在纯 CPU 上只有 0.30×（一小时课要三小时多），拿它当默认等于默认坑没显卡的机器。
+check('局部转写默认 base（没显卡也能在 20 分钟内出稿）', defaultModel('local', 'asr') === 'onnx-community/whisper-base');
 check('局部笔记默认 qwen2.5-7b', defaultModel('local', 'llm') === 'qwen2.5-7b');
 check('不存在的服务商返回空串', defaultModel('没有这家', 'llm') === '');
 check('默认模型一定在候选列表第一项', PROVIDERS.every((p) => ['asr', 'llm'].every((k) => {

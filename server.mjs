@@ -275,7 +275,7 @@ const DEFAULT_CONFIG = {
     /** 云端转写用哪一家（与 provider 同义，留在配置里方便界面回显；provider=local 时忽略） */
     cloudProvider: 'siliconflow',
     language: 'zh', // zh | en | auto
-    localModel: 'onnx-community/whisper-large-v3-turbo',
+    localModel: 'onnx-community/whisper-base',
     localDevice: 'auto', // auto | webgpu | wasm
     cdn: 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3',
     modelHost: 'https://hf-mirror.com', // 国内推荐；官方源 https://huggingface.co

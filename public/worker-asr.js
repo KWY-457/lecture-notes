@@ -50,15 +50,48 @@ function stopBeat() {
  * （120 秒音频 526.8 秒 / GPU 占用只有 13–22%），是 ONNX Runtime WebGPU 的
  * 量化算子后端不成熟，不是参数没调对。
  *
- * 所以：设备是 webgpu → fp16（要给 WebGPU 用就必须这份，约 3.1GB）；
- *       设备是 wasm   → q8（同一条音频实测 0.40× 实时，中文可读，胜出）。
+ * 所以默认：设备是 webgpu → fp16；设备是 wasm → q8。
+ *
+ * ★ 2026-11-03 补充实测：上面这条「webgpu 就 fp16」只对大模型成立。小模型的
+ * fp16 在 WebGPU 上**根本不工作**：
+ *
+ *   模型    GPU/fp16                         GPU/q8      CPU/q8
+ *   tiny    11.21×  正常                     0.50×      4.22×
+ *   base    2.7 秒跑完 120 秒音频 → 乱码       —         2.97×
+ *   small   1.6 秒跑完 120 秒音频 → 空输出    0.17×      1.36×
+ *   turbo   7.73×   正常                      —          0.30×
+ *
+ * 注意 base/small 那两行「快」是假的 —— 2 秒转完两分钟音频意味着它根本没在编码。
+ * 所以精度不能只看设备，还得看模型：由 providers.js 里的 cpuDtype / gpuDtype 声明
+ * （`gpuDtype: null` 表示这个模型在显卡上跑不了，退回 CPU）。
  *
  * cfg.dtype 可以显式覆盖，用于验证（比如强制 q8 走 WebGPU 复现上面那个坑）。
  */
-function pickDtype(model, device, override) {
-  void model;
+function pickDtype(model, device, override, spec) {
   if (override) return override;
-  return device === 'webgpu' ? 'fp16' : 'q8';
+  const isGpu = device === 'webgpu';
+  // 模型自己声明了就要听它的（见上面那张表：同样是 webgpu，tiny/turbo 能用 fp16，
+  // base/small 用了就是白跑）。
+  const declared = spec && (isGpu ? spec.gpuDtype : spec.cpuDtype);
+  if (declared) return declared;
+  if (spec && isGpu && spec.gpuDtype === null) {
+    // 走到这里说明这个模型明确不支援显卡，但没有可用的 q8 兜底（不该发生）；
+    // 保守给 fp16，至少不会因为 undefined 导致加载失败。
+    return 'fp16';
+  }
+  void model;
+  return isGpu ? 'fp16' : 'q8';
+}
+
+/**
+ * 这个模型在这个设备上该不该用显卡。
+ * `gpuDtype: null` 的模型（base / small）在显卡上要么乱码要么空输出，
+ * 与其让用户等 2 秒拿到一屏乱码，不如直接告诉他走 CPU。
+ * 返回 '' 表示维持原设备，返回 'wasm' 表示强制降级。
+ */
+function forceDevice(spec, device) {
+  if (!spec || device !== 'webgpu') return '';
+  return spec.gpuDtype === null ? 'wasm' : '';
 }
 
 /**
@@ -172,7 +205,7 @@ async function buildOnce(mod, cfg, dev, host) {
   try {
     return await mod.pipeline('automatic-speech-recognition', cfg.model, {
       device: dev,
-      dtype: pickDtype(cfg.model, dev, cfg.dtype),
+      dtype: pickDtype(cfg.model, dev, cfg.dtype, cfg.spec),
       progress_callback: (p) => {
         if (p && p.status === 'progress' && p.file) {
           const pct = p.total ? Math.round((p.loaded / p.total) * 100) : 0;
@@ -204,7 +237,10 @@ function isDeviceFailure(e) {
 }
 
 async function loadPipeline(cfg) {
-  const key = [cfg.cdn, cfg.model, cfg.device, cfg.dtype, cfg.modelHost].join('|');
+  // key 里必须带上 dtype 的实际值（不只是 cfg.dtype）：
+  // base/small 的 gpuDtype 是 null（强制走 CPU），如果按用户原始 cfg.device 缓存，
+  // 同一个模型先后在两台机器上切换时可能命中错的管线。
+  const key = [cfg.cdn, cfg.model, cfg.device, cfg.dtype, cfg.modelHost, cfg.spec && cfg.spec.gpuDtype].join('|');
   if (transcriber && loadedKey === key) return;
 
   const mod = await importTransformers(cdnCandidates(cfg.cdn));
@@ -220,8 +256,21 @@ async function loadPipeline(cfg) {
   // 踩过的坑：配置里没有 device 这个键时（老配置就是这样），原来会直接把 undefined 传给
   // transformers —— 它就老老实实用 CPU 跑，速度从约 4× 掉到 0.4×，而且界面上一句提示都没有。
   // 现在是「先要 GPU，失败再降级 WASM，并且把降级原因说出来」。
-  const requested = !cfg.device || cfg.device === 'auto' ? 'webgpu' : cfg.device;
+  //
+  // 例外：某些模型在显卡上根本不工作（base/small 的 fp16 是乱码或空，见 pickDtype 那张表）。
+  // 这种模型 providers.js 里写了 `gpuDtype: null`，这里直接跳过 GPU 重试 ——
+  // 否则它会在 WebGPU 上「2 秒跑完」然后吐一屏乱码，比慢更糟。
+  let requested = !cfg.device || cfg.device === 'auto' ? 'webgpu' : cfg.device;
   const host = await probeHosts(cfg);
+  const forced = forceDevice(cfg.spec, requested);
+  if (forced) {
+    post({
+      type: 'progress',
+      stage: 'model',
+      message: `这个模型在显卡上跑不出正确结果，改用 CPU。慢一些但字是对的；嫌慢可以换 large-v3-turbo。`,
+    });
+    requested = forced;
+  }
   let device = requested;
   try {
     transcriber = await buildOnce(mod, cfg, device, host);

@@ -919,6 +919,14 @@ body.remote .empty-card > p { margin-bottom: 16px; }
   gap: 7px; flex-wrap: wrap; word-break: break-all; letter-spacing: -.005em;
 }
 .model-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+/* 本地转写模型的实测耗时（「一小时课约 20 分钟」）。
+   单独一行、等宽数字、用主色弱化版 —— 它和上面那行「172MB · 较快，能读」是两回事：
+   那行说质量，这行说时间。老大 2026-11-03 要的就是这个数字，好让人按自己机器挑。
+   不给它加边框/底色：卡片本身已经是一层，再套一层会显得比标题还重。 */
+.model-speed {
+  font-size: 11px; color: var(--brand); margin-top: 3px; line-height: 1.4;
+  font-variant-numeric: tabular-nums; opacity: .85;
+}
 /* 档位徽章：零成本=绿、便宜·够用=灰、便宜·好用=蓝、偏贵·更好=琥珀、手填=虚线灰
    2026-10-29 起标签同时表达「贵不贵 × 好不好」（老大要求：只讲价格的标签用户没法比）。
    budget 和 custom 都是灰，所以 custom 改成虚线圈 + 斜体 —— 一眼看出它不是一档，是「自己填」。 */

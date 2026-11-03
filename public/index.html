@@ -324,13 +324,14 @@
           </div>
         </div>
 
-        <!-- 本地转写模型：同样是卡片选择器。下载体积差十倍（250MB ~ 1.3GB），
-             只写个仓库名用户没法判断该选哪个。 -->
+        <!-- 本地转写模型：同样是卡片选择器。四档体积差二十倍（96MB ~ 1.9GB），
+             速度差十几倍，只写个仓库名用户没法判断该选哪个，
+             所以每张卡上除了体积还标了实测耗时（providers.js 的 speedNote）。 -->
         <div class="field wide" data-for="local">
           <label>本地转写模型 <span class="hint" id="local-model-now"></span></label>
           <div class="model-list" id="local-model-list"></div>
           <div class="model-custom" id="local-model-custom" hidden>
-            <input id="s-local-model" placeholder="onnx-community/whisper-large-v3-turbo" autocomplete="off" spellcheck="false">
+            <input id="s-local-model" placeholder="onnx-community/whisper-base" autocomplete="off" spellcheck="false">
             <span class="hint">可填 HuggingFace 上任意兼容的仓库名</span>
           </div>
         </div>
