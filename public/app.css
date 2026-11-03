@@ -351,6 +351,73 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 
 .content { overflow: auto; padding: 20px 24px 64px; min-width: 0; }
 
+/* ---------- 详情页：应用外壳 ----------
+   打开录音时 .content 会挂上 detail-open（见 app.js 的 setDetailOpen）。
+
+   为什么要另起一套：以前详情页六层全铺在 .content 这一个滚动区里，
+   实测 1280×800 下正文第一个标题在 y=538 才出现 —— 视口 800px，
+   前 242px 被「返回 / 标题 / 元信息 / 播放器 / 工具栏」吃掉，剩下的还在往下滚。
+   音频播放器也跟着滚走，边听边看笔记得手动往回滚；右栏逐字稿只有 609px 高，
+   滚到 1500 之后右半屏整片空白。
+
+   改法：外壳定高。上面几层该多高多高，双栏吃掉「剩下的全部高度」，
+   两栏各自内部滚动。这样播放器和工具栏永远在，正文和逐字稿各滚各的。
+   窄屏不启用（下面 @media 里撤销）：那里双栏本来就是上下单栏，
+   逐字稿在下面，保持长文档更顺。 */
+@media (min-width: 1081px) {
+  .content.detail-open {
+    overflow: hidden; padding-bottom: 0;
+    /* 只有一条 1fr：详情块自己吃掉整个高度。写 auto auto … 会把 #detail
+       塞进 auto 那一行（#empty-state 是 hidden，不占格），详情就只剩内容高。 */
+    display: grid;
+    grid-template-rows: 1fr;
+    height: 100%; min-height: 0;
+  }
+  /* 用 flex 而不是 grid-template-rows：进度栏是 hidden 的（display:none），
+     它不进网格也不占行，写死 auto auto auto auto 1fr 会让双栏落到第 4 个
+     auto 上、只剩内容高。flex 里给双栏 flex:1 就没这个问题。 */
+  .content.detail-open #detail {
+    display: flex; flex-direction: column;
+    min-height: 0; height: 100%;
+  }
+  /* 上面四层不参与伸缩，双栏吃掉剩下全部。
+     这里千万不能写 `#detail > * { flex: none }` —— 那是 id 选择器（1,0,0），
+     会盖掉下面 `.content.detail-open .panes { flex: 1 1 auto }`（0,3,0），
+     双栏就又变回按内容撑高、外壳白做。第一版就栽在这，实测双栏 26666px。 */
+  .content.detail-open .detail-head,
+  .content.detail-open .player-bar,
+  .content.detail-open .toolbar,
+  .content.detail-open .progress-wrap { flex: none; }
+  /* 前四层保持原样（它们本来就有 margin-bottom），只是不再把它们算进滚动区 */
+  .content.detail-open .detail-head,
+  .content.detail-open .player-bar,
+  .content.detail-open .toolbar { margin-bottom: 10px; }
+  .content.detail-open .detail-head { margin-bottom: 10px; }
+  /* 进度栏是 hidden 时才不占位；这里显式让它按内容排 */
+  .content.detail-open .progress-wrap { margin-bottom: 10px; }
+
+  /* 双栏：外层不再被内容撑高，改成「撑满剩余高度 + 各自内部滚动」 */
+  .content.detail-open .panes {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+  }
+  .content.detail-open .pane {
+    display: flex; flex-direction: column;
+    min-height: 0; overflow: hidden;
+  }
+  .content.detail-open .pane-head { flex: none; }
+  /* 正文和逐字稿各自是滚动容器。去掉逐字稿的 70vh —— 那是个魔法值，
+     在外壳里它只会比可用高度更矮，白留一块空白。 */
+  .content.detail-open #note-view,
+  .content.detail-open .transcript {
+    flex: 1 1 auto; min-height: 0; overflow: auto;
+    max-height: none;
+  }
+  /* 笔记面板里的思维导图也是同一块位置，别让它溢出 */
+  .content.detail-open #note-view .mm-wrap { overflow-x: auto; }
+}
+
 /* ---------- 空状态 ----------
    引导页是用户见到的第一屏，最容易被做成「大图标 + 大标题 + 两按钮」的模板样。
    这里改成左对齐的一栏：标题收窄到 640px 便于阅读，步骤列表加序号圆点，
@@ -389,17 +456,28 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 
 /* ---------- 详情 ---------- */
 .detail-head { margin-bottom: 14px; }
-.detail-nav { margin-bottom: 10px; }
-.detail-nav .btn { padding: 3px 9px 3px 7px; }
-.title-row { display: flex; align-items: center; gap: 10px; }
-.title-row h1 {
+/* 详情头第一行：返回 / 标题 / 状态徽章 / 删除，全挤一行。
+   改前的排法是「返回列表」独占一行 + 标题一行 + 元信息一行 = 103px，
+   在 800px 高的视口里光这一块就吃掉八分之一，而它承载的信息扫一眼就够。
+   现在返回缩成图标 + 两个字（「返回」），删除从元信息行挪到这一行最右
+   —— 它本来就是针对「这条录音」的动作，跟标题同属一个层级。
+   省下来的 36px 全部让给正文（实测详情头 103 → 66）。 */
+.head-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.head-main #btn-back { flex: none; padding: 3px 9px 3px 7px; }
+.head-main #d-title {
   font-size: 22px; letter-spacing: -.02em; outline: none;
   border-bottom: 1px dashed transparent; padding-bottom: 2px;
-  min-width: 60px; max-width: 100%;
+  /* flex 收缩：标题长了先让标题缩、不要把徽章和删除挤出屏幕。
+     min-width 兜住一个下限，否则长标题会被压成一个字宽。 */
+  flex: 0 1 auto; min-width: 60px; max-width: 100%;
   transition: border-color .14s var(--ease);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.title-row h1:hover { border-bottom-color: var(--line-2); }
-.title-row h1:focus { border-bottom-color: var(--brand); }
+.head-main #d-title:hover { border-bottom-color: var(--line-2); }
+.head-main #d-title:focus { border-bottom-color: var(--brand); }
+.head-main .badge { flex: none; }
+/* 删除靠右：它是这一行里唯一不可逆的动作，离标题和其他控件远一点 */
+.head-main #btn-delete { flex: none; margin-left: auto; }
 /* 状态徽章：不用大写、不加粗，靠左侧的小圆点和颜色说话 */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
@@ -432,6 +510,13 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 }
 .meta-item input:hover { border-color: var(--line); background: var(--panel); }
 .meta-item input:focus { border-color: var(--line-2); background: var(--panel); outline: none; }
+/* 引擎标签挪到元信息行：它和「导入于 / 大小 / 时长」是同一类信息
+   （这条录音是用什么转的），不该挤在工具栏里把按钮顶到第二行。
+   原来在工具栏里宽度 362px —— 1280 下三个按钮组 923px + 间距 16px = 939，
+   比可用宽度 936px 多 3px，就因为这 3px 整整折了一行、白占 43px。 */
+.engine-tag { font-family: var(--mono); font-size: 11.5px; color: var(--muted-2); }
+/* 转写进行中时引擎标签会被写成 warn 色（app.js 的 renderEngineTag 里设 style.color），
+   这里不用管，留给内联样式覆盖。 */
 
 .player-bar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -1204,7 +1289,10 @@ body.dragging::after {
   .brand .logo { width: 24px; height: 24px; }
   .top-actions .btn { padding: 7px 10px; font-size: 13px; }
   .grid2 { grid-template-columns: 1fr; }
-  .title-row h1 { font-size: 18px; }
+  /* 窄屏标题字号降一档，「返回」也算在同行里 —— 390px 下
+     「返回 + 标题 + 徽章 + 删除」四项要能同时站住，标题还得能被省略号截。 */
+  .head-main { gap: 8px; }
+  .head-main #d-title { font-size: 18px; }
   .player-bar audio { min-width: 100%; }
   /* 笔记面板头在窄屏上允许换行：收起逐字稿后会多出「展开逐字稿」按钮，
      三个块挤一行时右边那行来源说明会被压成「A/I/生/成」竖排单字

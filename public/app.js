@@ -491,6 +491,7 @@ async function deleteLecture(id) {
     state.current = null;
     $('detail').hidden = true;
     $('empty-state').hidden = false;
+    setDetailOpen(false);
     $('audio').removeAttribute('src');
     try {
       history.replaceState(null, '', location.pathname);
@@ -522,6 +523,25 @@ function setBatchMode(on) {
 }
 
 /* ============================ 打开一条录音 ============================ */
+
+/**
+ * 详情页是「应用外壳」还是「长文档」？
+ *
+ * 以前两者混在一起：详情页六层（返回 / 标题 / 元信息 / 播放器 / 工具栏 / 双栏）
+ * 全铺在 .content 这一个滚动区里。实测 1280×800 下正文第一个标题要滚到 y=538
+ * 才出现 —— 一屏 800px，前 242px 被头三层吃掉，剩下的还在往下滚。
+ * 更糟的是音频播放器跟着滚走：边听边看笔记得手动往回滚。
+ *
+ * 现在桌面端打开录音时给 .content 挂 detail-open，把它变成定高外壳：
+ * 上面几层定高，双栏吃掉剩余高度、各自内部滚动。关掉详情页立刻还原成
+ * 普通长文档（引导页仍要能正常滚）。
+ * 窄屏不启用：那里双栏本来就是上下单栏，逐字稿在下面，保持原样更顺。
+ */
+function setDetailOpen(on) {
+  const c = $('content') || document.querySelector('.content');
+  if (c) c.classList.toggle('detail-open', !!on);
+}
+
 async function openLecture(id) {
   // 手机模式没有详情页（转写/笔记/导出全在电脑上做），从任何入口点进来都拦住。
   // 不拦的话点一下会白屏 —— 详情那块 DOM 还在，但里面的按钮全被 CSS 藏了。
@@ -533,6 +553,7 @@ async function openLecture(id) {
   state.current = data;
   $('empty-state').hidden = true;
   $('detail').hidden = false;
+  setDetailOpen(true);
   try {
     history.replaceState(null, '', '#/l/' + id);
   } catch {}
@@ -3412,6 +3433,7 @@ function bind() {
       state.current = null;
       $('detail').hidden = true;
       $('empty-state').hidden = false;
+      setDetailOpen(false);
       $('audio').removeAttribute('src');
       try {
         history.replaceState(null, '', location.pathname);
@@ -3640,6 +3662,7 @@ function closeDetail() {
   state.current = null;
   $('detail').hidden = true;
   $('empty-state').hidden = false;
+  setDetailOpen(false);
   const a = $('audio');
   a.pause();
   a.removeAttribute('src');

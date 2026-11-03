@@ -126,18 +126,26 @@
 
     <!-- 详情 -->
     <div id="detail" hidden>
+      <!-- 详情头：三行并成两行。
+           原来「返回列表」独占一行（26px + 10px 间距），标题又一行，元信息再一行，
+           合计 103px。在一个 800px 高的视口里，光这一块就吃掉八分之一，
+           而它承载的信息（一条录音叫什么、什么时候导入、多大）用户扫一眼就够了。
+           现在「返回」缩成图标 + 两个字，和标题同一行；删除从元信息行挪到标题行右侧
+           （它本来就是针对「这条录音」的动作，跟标题同属一个层级）。 -->
       <div class="detail-head">
-        <div class="detail-nav">
-          <button class="btn ghost tiny" id="btn-back"><svg class="i sm"><use href="#i-arrow-left"/></svg>返回列表</button>
-        </div>
-        <div class="title-row">
+        <div class="head-main">
+          <button class="btn ghost tiny" id="btn-back" title="回到录音列表"><svg class="i sm"><use href="#i-arrow-left"/></svg>返回</button>
           <h1 id="d-title" contenteditable="true" spellcheck="false">未命名</h1>
           <span class="badge" id="d-status">已导入</span>
+          <button class="icon-btn tiny" id="btn-delete" title="删除这条录音"><svg class="i"><use href="#i-trash"/></svg></button>
         </div>
         <div class="meta-row">
           <label class="meta-item">课程 <input id="d-course" placeholder="如：数据结构" size="10"></label>
           <span class="meta-item" id="d-info"></span>
-          <button class="icon-btn tiny" id="btn-delete" title="删除这条录音"><svg class="i"><use href="#i-trash"/></svg></button>
+          <!-- 引擎标签原来挤在工具栏里（「硅基流动 SenseVoice · Qwen/Qwen3-ASR-1.7B · 547 段」
+               一句就 362px 宽），把工具栏顶到两行、多占 43px。它本来就是「这条录音是
+               用什么转的」这种元信息，跟导入时间、大小、时长同一类，挪到元信息行更合适。 -->
+          <span class="engine-tag" id="engine-tag"></span>
         </div>
       </div>
 
@@ -154,7 +162,6 @@
         <div class="tb-group">
           <button class="btn primary" id="btn-transcribe">① 开始转写</button>
           <span class="tb-hint" id="transcribe-hint"></span>
-          <span class="engine-tag" id="engine-tag"></span>
         </div>
         <div class="tb-group">
           <button class="btn ghost" id="btn-notes" title="转写完成后笔记会自动生成；想按新设置重做时点这里">重新生成笔记</button>
