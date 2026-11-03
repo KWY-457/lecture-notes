@@ -610,25 +610,26 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 .pane-tools { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 #btn-tx-collapse { white-space: nowrap; }
 
-/* 收起逐字稿：整列压掉，笔记占满宽度。
+/* 收起逐字稿：整列压掉，笔记吃满整行。
    和左边「收起录音列表」一个思路（display:none + grid 变一列），
    但这里多了个回程入口：收起后笔记面板头右边会冒出「展开逐字稿」，
    否则用户就再也找不到它了。
    窄屏（≤1080px）本来就是上下单栏、逐字稿在下面，收起只是把它藏起来，
-   网格不用改（grid-template-columns 已经是 1fr）。 */
+   网格不用改（grid-template-columns 已经是 1fr）。
+
+   这里绕过两次弯，记下来免得再绕：
+     · 第一版只给正文卡 max-width，卡片照样拉满，滚动条悬在卡片中间、
+       右边空一条灰底；
+     · 第二版把卡片自己收窄居中，结果上面三层（标题/播放器/工具栏）还拉满，
+       上下边缘对不上，老大看着「像两个东西叠着」；
+     · 第三版把上面三层也收到 1080 对齐了，整齐是整齐了，可整页只剩中间
+       一窄条、两边各空 350px 灰底 —— 老大一句话点破：
+       「不是让上面变短啊，不应该把下面左右拉长吗」。
+   正解是反过来的：收起逐字稿是为了看更宽的东西，那就让笔记卡吃满整行。
+   上面三层本来就跟内容区等宽，下面也铺满，边缘自然对齐，还多出一大截宽度。 */
 .panes.tx-collapsed { grid-template-columns: 1fr; }
 .panes.tx-collapsed .tx-pane { display: none; }
-/* 收起逐字稿之后，笔记卡本身也要缩到读得舒服的宽度 —— 不是把卡片拉满、
-   再拿 max-width 卡住里面的正文。那样滚动条会贴在 1080px 处、悬在卡片中间，
-   右边空出三百多像素的灰底（2026-11-03 老大把侧栏也收起时看出来的）。
-   所以：卡片和正文一起收窄，并且靠 margin:auto 居中，右边不留一条缝。
-   1080px 这个数不动 —— 再宽一行就排到一百三四十个字，来回扫行很累。
-   历史坑：最早写过 max-width:74ch + 居中，74ch≈660px 跟收起前差不多，白收一场。 */
-.panes.tx-collapsed .pane {
-  max-width: 1080px;
-  width: 100%;
-  margin: 0 auto;
-}
+.panes.tx-collapsed .pane { max-width: none; }
 
 /* 笔记面板头里的「展开逐字稿」入口，只在收起时出现 */
 .tx-reopen { flex: 0 0 auto; display: inline-flex; align-items: center; }

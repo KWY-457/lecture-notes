@@ -87,12 +87,15 @@ check('.panes.tx-collapsed 存在且变成一列', /grid-template-columns:\s*1fr
 const hiddenTx = blockOf('.panes.tx-collapsed .tx-pane');
 check('收起时 .tx-pane 是 display:none（真藏起来，不是透明度）', /display:\s*none/.test(hiddenTx), hiddenTx.trim());
 const bodyW = blockOf('.panes.tx-collapsed .pane');
-check('收起后笔记卡有宽度上限（防带鱼屏长行）', /max-width:/.test(bodyW), bodyW.slice(0, 100));
-check('那个上限不小于 900px —— 小了就白收（踩过 74ch 的坑）', (() => {
-  const m = bodyW.match(/max-width:\s*(\d+)px/);
-  return !!m && Number(m[1]) >= 900;
-})(), bodyW.slice(0, 120));
-check('收起后笔记卡水平居中（左右留白一样宽，别让右边空一条灰底）', /margin:\s*0\s+auto/.test(bodyW), bodyW.slice(0, 120));
+// 2026-11-03 定稿：收起逐字稿 = 想让笔记更宽，所以是「解除宽度上限、吃满整行」，
+// 不是「收窄到一窄条居中」。两种做法都试过，收窄的那版整页只剩中间一窄条、
+// 两边各空 350px 灰底，老大一句「不是让上面变短，不应该把下面拉长吗」点破。
+check('收起后笔记卡解除宽度上限、吃满整行',
+  /max-width:\s*none|max-width:\s*100%/.test(bodyW), bodyW.slice(0, 100));
+check('宽度上限没有偷偷卡在正文上（.markdown / .mm 不许再带 max-width）',
+  !blockOf('.panes.tx-collapsed .markdown') && !blockOf('.panes.tx-collapsed .mm'), '');
+check('收起后笔记卡不加 margin:auto 居中（那是收窄方案才会做的事）',
+  !/margin:\s*0\s+auto/.test(bodyW), bodyW.slice(0, 120));
 check('手机端收起不破坏布局（.tx-pane 的隐藏与宽度无关）', !/@media/.test(hiddenTx), '');
 
 console.log('\n=== 4. 不影响别的功能 ===');

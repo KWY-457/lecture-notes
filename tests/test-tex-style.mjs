@@ -50,10 +50,14 @@ console.log('\n=== 2. 根号对齐 ===');
 
 console.log('\n=== 3. 括号跟着内容长高 ===');
 {
-  check('有 :has(.tex-frac) 的弹性括号规则', css.includes(':has(.tex-frac)'), '');
-  check('有 :has(.tex-sqrt) 的弹性括号规则', css.includes(':has(.tex-sqrt)'), '');
-  const i = css.indexOf('.tex:has(.tex-frac)');
-  const seg = i < 0 ? '' : css.slice(i, i + 600);
+  // 注意：不能在注释里搜 —— 注释可以先提到 `.tex:has(.tex-frac)` 这个选择器名
+  // （比如解释「本项目已经在用 :has()」），indexOf 会抢到注释里那一处，
+  // 然后从注释往后截 600 字，真正的规则根本不在窗口里。所以先剥掉注释再找。
+  const cssNoComment = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  check('有 :has(.tex-frac) 的弹性括号规则', cssNoComment.includes(':has(.tex-frac)'), '');
+  check('有 :has(.tex-sqrt) 的弹性括号规则', cssNoComment.includes(':has(.tex-sqrt)'), '');
+  const i = cssNoComment.indexOf('.tex:has(.tex-frac)');
+  const seg = i < 0 ? '' : cssNoComment.slice(i, i + 600);
   const m = seg.match(/scaleY\(([\d.]+)\)/);
   check('括号纵向拉伸 1.4~1.8 倍（实测 1.6 最好）', !!m && Number(m[1]) >= 1.4 && Number(m[1]) <= 1.8, m && m[0]);
   check('拉伸用 inline-block（否则 transform 不生效）', /display\s*:\s*inline-block/.test(seg), '');
