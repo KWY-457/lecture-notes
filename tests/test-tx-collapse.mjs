@@ -86,13 +86,13 @@ const collapsedPanes = blockOf('.panes.tx-collapsed');
 check('.panes.tx-collapsed 存在且变成一列', /grid-template-columns:\s*1fr/.test(collapsedPanes), collapsedPanes.slice(0, 80));
 const hiddenTx = blockOf('.panes.tx-collapsed .tx-pane');
 check('收起时 .tx-pane 是 display:none（真藏起来，不是透明度）', /display:\s*none/.test(hiddenTx), hiddenTx.trim());
-const bodyW = blockOf('.panes.tx-collapsed .markdown,\n.panes.tx-collapsed .mm');
-check('收起后正文有宽度上限（防带鱼屏长行）', /max-width:/.test(bodyW), bodyW.slice(0, 100));
+const bodyW = blockOf('.panes.tx-collapsed .pane');
+check('收起后笔记卡有宽度上限（防带鱼屏长行）', /max-width:/.test(bodyW), bodyW.slice(0, 100));
 check('那个上限不小于 900px —— 小了就白收（踩过 74ch 的坑）', (() => {
   const m = bodyW.match(/max-width:\s*(\d+)px/);
   return !!m && Number(m[1]) >= 900;
 })(), bodyW.slice(0, 120));
-check('收起后正文不再写 margin:auto 居中（那样看着像没收起）', !/margin:\s*0\s+auto/.test(bodyW), bodyW.slice(0, 120));
+check('收起后笔记卡水平居中（左右留白一样宽，别让右边空一条灰底）', /margin:\s*0\s+auto/.test(bodyW), bodyW.slice(0, 120));
 check('手机端收起不破坏布局（.tx-pane 的隐藏与宽度无关）', !/@media/.test(hiddenTx), '');
 
 console.log('\n=== 4. 不影响别的功能 ===');
