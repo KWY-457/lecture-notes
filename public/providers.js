@@ -324,20 +324,88 @@ export const PROVIDERS = [
     // 笔记走本机 llama-server（helpers/setup-local-llm.ps1 一键部署）
     baseUrl: 'http://127.0.0.1:8080/v1',
     apiKeyHint: '本地服务不用填',
+    // ★ 2026-11-05 实测两档（老大 m29315：AI 润色的模型也别就一个）
+    //
+    // 测法：录音「工程制图」(62b4f73d) 的前 5997 字逐字稿，同一段材料、同一套
+    // 启动参数（-c 16384 -ngl 99 -ctk q8_0 -ctv q8_0 -t 8 --jinja），
+    // max_tokens 2048。脚本 _scratch/bench-llm.mjs。机器 RTX 5060 Laptop / 8GB。
+    //
+    // ┌ 模型  体积    启动   生成   输出             显存增量
+    // │ 1.5B  0.92GB  1.7s   12.6s  2048tok/2824字   +1325MB
+    // │ 3B    1.80GB  2.1s    6.3s   563tok/ 991字   +2301MB
+    // │ 7B    4.36GB  4.5s    7.8s   337tok/ 569字   +4921MB
+    // └
+    //
+    // 为什么不放 1.5B：它不是「质量差一点」，是坏了。放开到 max_tokens 4096
+    // 重测 —— 25.0 秒写 6663 字 101 个小节，然后开始自己重复
+    // （「课程考核：教材内容与心理材料相结合」连着写三遍），finish_reason
+    // 是 length 而不是 stop，也就是它根本不会自己停。
+    //
+    // 为什么不只留 7B：7B 写得反而更短（569 字 vs 3B 的 991 字），
+    // 把源素材里的「课程考核方式」整段丢了；而且常驻要 4.9GB 显存，
+    // 本地转写（Whisper）和本地润色共用同一块 8GB 显存，7B 常驻之后
+    // Whisper 只剩 3GB。3B 结构最规整、覆盖课程名称/培养目标/内容重点/
+    // 考核方式四项，显存只花 2.3GB。
+    //
+    // 所以两档：3B 默认（省显存，笔记本友好），7B 给显存宽裕、想要更凝练的人。
+    //
+    // ★ 2026-11-06 又加两档（老大：「还有没有更高配置的，因为别的用户可能设备
+    // 性能比我的这个要更好，都再往上再加一档吧」）。本机只有 8GB 显存 + 16GB
+    // 内存，所以：
+    //   · 14B（8.37GB）**实测过**：8GB 显存上自动分层后 6.50 tok/s，
+    //     产出质量比 3B/7B 好一档（把「占总评 12 分」和「GB 国标」都写全了）。
+    //   · 32B（18.49GB）**没实测** —— 本机装不下。列出来是因为 24GB 显存的
+    //     台式机跑得动，而这一档的用户正是老大说的「设备性能更好的人」。
+    //     卡片上如实写「未在本机实测过」，不编数字。
     models: [
+      {
+        id: 'qwen2.5-3b',
+        label: 'qwen2.5-3b',
+        tier: 'free',
+        priceNote: '1.8GB',
+        qualityNote: '结构规整，要点齐全',
+        reqNote: '显存 3GB · 内存 8GB',
+        gguf: 'Qwen2.5-3B-Instruct-Q4_K_M.gguf',
+      },
       {
         id: 'qwen2.5-7b',
         label: 'qwen2.5-7b',
         tier: 'free',
-        qualityNote: '不出本机，速度一般',
+        priceNote: '4.4GB',
+        qualityNote: '更凝练，但会漏细节',
+        reqNote: '显存 6GB · 内存 16GB',
+        gguf: 'Qwen2.5-7B-Instruct-Q4_K_M.gguf',
+      },
+      {
+        id: 'qwen2.5-14b',
+        label: 'qwen2.5-14b',
+        tier: 'free',
+        priceNote: '8.4GB',
+        qualityNote: '细节记得最全',
+        // 实测：8GB 显存（RTX 5060 Laptop）自动分层后占 6791MB、6.50 tok/s。
+        // 所以 8GB 就能跑，不是「必须 10GB」—— 别把能跑的人挡在外面。
+        reqNote: '显存 8GB 起 · 内存 16GB',
+        gguf: 'Qwen2.5-14B-Instruct-Q4_K_M.gguf',
+      },
+      {
+        id: 'qwen2.5-32b',
+        label: 'qwen2.5-32b',
+        tier: 'free',
+        priceNote: '18.5GB',
+        qualityNote: '更强，家用机基本跑不动',
+        // 这一档没实测 —— 本机 8GB 显存装不下（权重本身就 18.5GB，比 16GB 内存还大）。
+        // 配置是按「Q4_K_M 需要略大于权重的显存/内存」推的，不是量出来的。
+        reqNote: '显存 24GB 起 · 内存 32GB',
+        gguf: 'Qwen2.5-32B-Instruct-Q4_K_M.gguf',
       },
     ],
     local: true,
-    note: '录音和逐字稿完全不出本机，一分钱不花。代价：转写要下 96MB 到 1.9GB 的 Whisper 模型、笔记要下 4.4GB 的本地大模型，都吃内存和显卡；配置一般的电脑会明显卡顿。',
+    note: '录音和逐字稿完全不出本机，一分钱不花。代价：转写要下 96MB 到 1.9GB 的 Whisper 模型、笔记要下 1.8GB 或 4.4GB 的本地大模型，都吃内存和显卡；配置一般的电脑会明显卡顿。',
     setup: [
       '转写：什么都不用装。第一次转写会自动从 hf-mirror 下载 Whisper 模型，下过一次就留在本地。',
-      '笔记：设置 → ⑥ 环境自检 →「部署本地模型」，一键装好 llama-server 和 Qwen2.5 共 4.4GB。',
+      '笔记：设置 → ⑤ 环境自检 →「部署本地模型」，一键装好 llama-server 和 Qwen2.5。',
       '不知道选哪个转写模型就看卡片上最后一行：不要显卡的 base / small 大多数电脑都能跑，tiny 更快但错字多，large-v3-turbo 要有独立显卡才划算。',
+      '切笔记模型会让本地大模型重启一次（两三秒），因为一次只能装一个模型。',
     ],
   },
 

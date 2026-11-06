@@ -1396,6 +1396,79 @@ async function localLlmDeployOk(home) {
   return (await exists(cuda)) || (await exists(vulkan));
 }
 /**
+ * 让部署位置里的 start-llm.vbs 跟当前版本的源头脚本一致。
+ *
+ * 为什么需要这个：`helpers/setup-local-llm.ps1` 只在「点部署」那一次把
+ * `helpers/model-start-src.vbs` 转成 UTF-16LE 写到 `<home>\start-llm.vbs`。
+ * 之后软件升级、源头脚本改了（比如 2026-11-05 加了「读 active-model.txt
+ * 决定加载哪个 gguf」），用户机器上那份**不会自己更新** —— 于是界面能切
+ * 模型、指针文件也写了，vbs 却还在加载写死的那个 7B。
+ *
+ * 这就是典型的「升级一次就少一个功能，而且不报错」。所以在每次要启动
+ * llama-server 之前顺手对一遍，不一致就重写一份。
+ *
+ * 写不进去不报错（Program Files、只读盘）：老 vbs 还能用，只是换不了模型，
+ * 比整个启动失败强。
+ */
+async function ensureLlmLauncher(home) {
+  if (!home) return;
+  const src = path.join(__dirname, 'helpers', 'model-start-src.vbs');
+  const dst = path.join(home, 'start-llm.vbs');
+  const body = await fsp.readFile(src, 'utf8').catch(() => '');
+  if (!body) return;
+  const old = await fsp.readFile(dst, 'utf8').catch(() => '');
+  if (old === body) return;
+  // setup-local-llm.ps1 用的是 [Text.UnicodeEncoding]::new(false, true)：
+  // 小端 + BOM。这里照做 —— vbs 里有中文提示框，不按 UTF-16LE 存会乱码。
+  await fsp.writeFile(dst, '\uFEFF' + body, 'utf16le').catch(() => {});
+}
+/**
+ * 本地大模型当前该加载哪个 gguf。
+ *
+ * 一次只能装一个模型，所以「用哪档」记在 `models\active-model.txt` 里
+ * （一行文件名，相对 models\ 目录）。这个文件是 start-llm.vbs 唯一的输入，
+ * 也就是说：改文件 + 重启 llama-server = 换模型，不用给 wscript 传参，
+ * 用户双击那个 vbs 也照样能起。
+ *
+ * 文件不存在 / 读不出来 / 写的那个 gguf 不在了 → 返回 ''，让 vbs 自己
+ * 退回默认的 7B。老部署（升级上来，models 目录里只有 7B）走的正是这条路。
+ */
+async function activeLlmModelFile(home) {
+  const p = path.join(home || '', 'models', 'active-model.txt');
+  const raw = await fsp.readFile(p, 'utf8').catch(() => '');
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const full = path.join(home, 'models', t);
+    if (await fsp.access(full, fs.constants.F_OK).then(() => true, () => false)) return t;
+    return '';
+  }
+  return '';
+}
+/**
+ * 记下本地大模型当前该加载哪一档（只是写个指针文件，不做重启）。
+ * 真正的重启在下面 /local-llm/model 那个接口里做。
+ *
+ * ⚠ 这个文件**只能写纯 ASCII**（文件名 + 注释都用英文），原因记在这里免得
+ * 以后有人「顺手加句中文注释」：
+ * start-llm.vbs 用 `fso.OpenTextFile(p, 1)` 读它，不带 BOM 的 UTF-8 会被
+ * 按 ANSI 解码 —— 中文的字节里会出现被当成换行符的值，整个文件读成一行，
+ * 而且这行以 # 开头，于是被当注释跳过，指针白写、静默退回 7B。
+ * 换成 ADODB.Stream 指定 UTF-8 也能解决，但那样 vbs 要多二十行，
+ * 而这里本来只需要一个文件名。
+ */
+async function setActiveLlmModel(home, file) {
+  const dir = path.join(home, 'models');
+  await fsp.mkdir(dir, { recursive: true }).catch(() => {});
+  const body =
+    '# Which gguf the local LLM loads. One bare file name, relative to this\n' +
+    '# folder. Edit it and restart the local model to switch.\n' +
+    '# ASCII only -- see setActiveLlmModel() in server.mjs before adding text.\n' +
+    file +
+    '\n';
+  await fsp.writeFile(path.join(dir, 'active-model.txt'), body, 'ascii');
+}
+/**
  * 记下本地大模型的安装位置，下次直接读，不用再扫一遍盘。
  * 写失败不报错（数据目录不可写的极端情况下，扫描逻辑本来也能兜住）。
  */
@@ -1996,7 +2069,7 @@ async function handleApi(req, res, u) {
       }
     };
     if (req.method === 'GET') {
-      const [running, gpu] = await Promise.all([isRunning(), readGpu()]);
+      const [running, gpu, activeModel] = await Promise.all([isRunning(), readGpu(), activeLlmModelFile(llmHome)]);
       // home 给前端显示「装在哪」，用户找不到模型时能自己去看。
       // partial = 目录里有 start-llm.vbs 但缺运行时，是「装了一半」，
       // 界面要提示重新部署，而不是显示一个点了会报错的启动按钮。
@@ -2007,6 +2080,8 @@ async function handleApi(req, res, u) {
         configured: !!launcherPath,
         partial,
         home: llmHome,
+        // 当前装的是哪个 gguf。空串 = 还没设过（老部署），vbs 会退回 7B。
+        activeModel,
         ...gpu,
       });
     }
@@ -2016,6 +2091,59 @@ async function handleApi(req, res, u) {
         await execFileAsync('taskkill', ['/IM', 'llama-server.exe', '/F'], { timeout: 10000, windowsHide: true }).catch(() => {});
         await new Promise((r) => setTimeout(r, 800));
         return json(res, 200, { ok: true, running: await isRunning(), ...(await readGpu()) });
+      }
+      /**
+       * 换本地大模型：写指针 → 停旧的 → 用新模型重新拉起。
+       *
+       * 为什么必须重启：llama-server 一次只装一个 gguf，而且它压根不校验
+       * 请求里的 model 字段（实测：随便写个名字也回 200，永远给启动时
+       * -m 那个）。所以「换模型」在物理上就等于「换进程」。
+       *
+       * 停机→启动之间有 2~5 秒空档（取决于模型多大），期间 AI 润色会连不上。
+       * 这比悄悄失败强：前端拿到 starting:true 就提示「正在重启」，
+       * 而不是让用户点一次润色、等 30 秒、然后看见「连接被拒绝」。
+       */
+      if (body.action === 'model') {
+        if (!llmHome) {
+          return fail(res, 400, '还没有部署本地大模型，先在设置里点「部署本地模型」。');
+        }
+        const want = String(body.gguf || '').trim();
+        if (!want) return fail(res, 400, '缺少 gguf 文件名');
+        // 只收 models 目录里的文件名，别让人传 ..\..\ 去覆盖别处的文件
+        if (/[\\/]/.test(want) || want.includes('..')) {
+          return fail(res, 400, '模型文件名不合法');
+        }
+        const full = path.join(llmHome, 'models', want);
+        if (!(await fsp.access(full, fs.constants.F_OK).then(() => true, () => false))) {
+          return fail(
+            res,
+            404,
+            `没有这个模型文件：${want}\n` +
+              `去 ${path.join(llmHome, 'models')} 里看看 —— 这个档还没下载。`
+          );
+        }
+        const changed = (await activeLlmModelFile(llmHome)) !== want;
+        await setActiveLlmModel(llmHome, want);
+        // 没在跑就别自作主张拉起来 —— 用户可能压根没开本地笔记。
+        // 指针已经写好了，下次点「启动」自然读到新的。
+        const wasRunning = await isRunning();
+        if (!wasRunning) {
+          return json(res, 200, { ok: true, switched: false, running: false, model: want });
+        }
+        if (!changed) {
+          return json(res, 200, { ok: true, switched: false, running: true, model: want });
+        }
+        await execFileAsync('taskkill', ['/IM', 'llama-server.exe', '/F'], { timeout: 10000, windowsHide: true }).catch(() => {});
+        // 等进程真的死掉 —— taskkill 返回不代表端口已释放，立刻拉起会 bind 失败
+        for (let i = 0; i < 40; i++) {
+          if (!(await isRunning())) break;
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        // 启动前先把启动器对一遍：老部署里的 start-llm.vbs 是旧版，
+        // 里面写死了 7B，不改的话刚写进去的 active-model.txt 等于白写。
+        await ensureLlmLauncher(llmHome);
+        await execFileAsync('wscript.exe', [launcherPath], { timeout: 10000, windowsHide: true }).catch(() => {});
+        return json(res, 200, { ok: true, switched: true, starting: true, model: want, home: llmHome });
       }
       if (body.action === 'start') {
         if (!launcherPath) {
@@ -2030,6 +2158,9 @@ async function handleApi(req, res, u) {
               `（已经找过这些位置：\n${looked}\n  …）`
           );
         }
+        // 同上：老部署里的 start-llm.vbs 是旧版（写死 7B、不读 active-model.txt），
+        // 在这条「手动点启动」的路上也要对一遍，否则用户切了档点启动还是老模型。
+        await ensureLlmLauncher(llmHome);
         await execFileAsync('wscript.exe', [launcherPath], { timeout: 10000, windowsHide: true }).catch(() => {});
         return json(res, 200, { ok: true, starting: true, home: llmHome });
       }

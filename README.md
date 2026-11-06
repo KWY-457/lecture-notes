@@ -143,7 +143,7 @@
 
 | 服务商 | 转写模型 | 笔记模型 |
 | --- | --- | --- |
-| 本地（免费、不上传） | `onnx-community/whisper-base`（默认，172MB）/ `whisper-tiny`（96MB）/ `whisper-small`（521MB）/ `whisper-large-v3-turbo`（1.9GB） | `qwen2.5-7b`（需先在 ⑥ 环境自检里部署，约 4.4GB） |
+| 本地（免费、不上传） | `onnx-community/whisper-base`（默认，172MB）/ `whisper-tiny`（96MB）/ `whisper-small`（521MB）/ `whisper-large-v3-turbo`（1.9GB） | `qwen2.5-3b`（默认，1.8GB）/ `qwen2.5-7b`（4.4GB）/ `qwen2.5-14b`（8.4GB）/ `qwen2.5-32b`（18.5GB）—— 需先在 ⑤ 环境自检里部署运行时 |
 | 硅基流动 SiliconFlow | `FunAudioLLM/SenseVoiceSmall`（免费，默认）/ `Qwen/Qwen3-ASR-1.7B`（约 ¥0.8/小时） | `Qwen/Qwen2.5-7B-Instruct`（默认，一节课一两分钱）/ `Qwen/Qwen3-30B-A3B-Instruct-2507` / `deepseek-ai/DeepSeek-V3` / `zai-org/GLM-5.3-Flash`（便宜，但不是免费的） |
 | OpenAI 官方 | `whisper-1` | `gpt-4o-mini`（默认）/ `gpt-4o` |
 | 自定义（自建/中转） | 自己填 | 自己填 |
@@ -183,7 +183,7 @@
 | --- | --- | --- |
 | 硅基流动（默认推荐） | `https://api.siliconflow.cn/v1` | `Qwen/Qwen2.5-7B-Instruct`（不思考、最快）/ `Qwen/Qwen3-30B-A3B-Instruct-2507` / `deepseek-ai/DeepSeek-V3` / `zai-org/GLM-5.3-Flash` |
 | OpenAI 官方 | `https://api.openai.com/v1` | `gpt-4o-mini` / `gpt-4o` |
-| 本地（本机大模型） | `http://127.0.0.1:8080/v1` | `qwen2.5-7b` |
+| 本地（本机大模型） | `http://127.0.0.1:8080/v1` | `qwen2.5-3b` / `qwen2.5-7b` / `qwen2.5-14b` / `qwen2.5-32b`（换档会自动重启本地模型，约 3~10 秒） |
 | 自定义 · DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | 自定义 · 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
 | 自定义 · 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash`（免费档） |
@@ -458,34 +458,43 @@ node tests\net-check.mjs http://127.0.0.1:8788
 
 ## 十一、本地大模型（本机已部署，完全离线）
 
-> **下面这一节写的是作者这台机器上的实际情况，路径里的 `D:\Download\AI` 只是作者的部署位置，你自己的会不一样。** 买家不用管这一节 —— 想用本地大模型，在 设置 → ⑥ 环境自检 里点「一键部署本地模型」，脚本会自己挑一个可写的位置（优先数据目录下的 `local-llm`，装到 Program Files 时就是 `%LOCALAPPDATA%\LectureNotes\data\local-llm`），共约 4.4 GB。
+> **下面这一节写的是作者这台机器上的实际情况，路径里的 `D:\Download\AI` 只是作者的部署位置，你自己的会不一样。** 买家不用管这一节 —— 想用本地大模型，在 设置 → ⑤ 环境自检 里点「一键部署本地模型」，脚本会自己挑一个可写的位置（优先数据目录下的 `local-llm`，装到 Program Files 时就是 `%LOCALAPPDATA%\LectureNotes\data\local-llm`），运行时约 0.3 GB，模型另算（1.8 ~ 18.5 GB，按你选的那档下）。
 
 这台机器上已经装好了一整套**只在 D 盘、不联网**的大模型推理环境：
 
 | 项目 | 位置 / 参数 |
 | --- | --- |
 | 推理运行时 | `D:\Download\AI\runtime\cuda\` —— llama.cpp（CUDA 13.4 构建，支持 Blackwell） |
-| 模型 | `D:\Download\AI\models\Qwen2.5-7B-Instruct-Q4_K_M.gguf`（4.4 GB） |
+| 模型（当前） | `D:\Download\AI\models\` 下四档都在：3B 1.8GB / 7B 4.4GB / 14B 8.4GB / 32B 未下载 |
+| 当前加载哪档 | `D:\Download\AI\models\active-model.txt`（纯 ASCII，一行文件名） |
 | 启动脚本 | `D:\Download\AI\start-llm.vbs`（双击，无黑框） |
-| 停止脚本 | `D:\Download\AI\stop-llm.vbs`（释放约 6 GB 显存） |
+| 停止脚本 | `D:\Download\AI\stop-llm.vbs`（释放显存） |
 | 服务地址 | `http://127.0.0.1:8080/v1`（OpenAI 兼容，只监听本机，局域网访问不到） |
 
 桌面上的「**讲义笔记**」快捷方式只拉起网页服务，**不会自动拉起这个模型**——点「AI 润色」或校对时由应用按需拉起（`ensureLocalLLM()`），不用的时候它一点内存、显存都不占。想手动停掉时双击 `stop-llm.vbs` 即可，网页服务和离线笔记功能不受影响。
 
 ### 实测速度（RTX 5060 Laptop 8 GB / 16K 上下文 / KV 量化 q8_0）
 
-| 项目 | 成绩 |
-| --- | --- |
-| 提示处理 pp512 | **2558 tokens/秒** |
-| 文本生成 tg128 | **62.4 tokens/秒** |
-| 示例课（879 字）生成笔记 | **12 秒** |
-| 一小时课（约 1.5 万字）估算 | **2–4 分钟** |
+| 模型 | 体积 | 显存占用 | 生成速度 | 一小时课估算 |
+| --- | --- | --- | --- | --- |
+| `qwen2.5-3b` | 1.8 GB | 3.1 GB | **104.7 tok/s** | 十几秒 |
+| `qwen2.5-7b` | 4.4 GB | 5.7 GB | **62.4 tok/s** | 半分钟 |
+| `qwen2.5-14b` | 8.4 GB | 6.8 GB（自动分层） | **6.5 tok/s** | 几分钟 |
+| `qwen2.5-32b` | 18.5 GB | 本机装不下 | 未实测 | —— |
+
+前两行是同一段话（53 token）实测；14B 那行同一段话 54 token 用了 8.3 秒。32B 权重就有 18.5 GB，比这台机器的内存还大，所以没测。
 
 对比：CUDA 后端比 Vulkan 后端提示处理快约 27%（2558 vs 2016），所以最终用的是 CUDA。
 
+> **⚠ 别给 `-ngl` 参数。** 2026-11-06 实测：14B 在 8GB 显存上手写 `-ngl 99`，llama.cpp 的自动分层会直接放弃（日志：`failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort`），退化成大部分层跑 CPU，速度掉到 **1.05 tok/s**（生成 164 个 token 花了 5 分 21 秒）。去掉它让 llama.cpp 自己算，同一个模型变 **6.50 tok/s，快 6 倍**；而 3B / 7B 完全不受影响（显存够时它照样全部层上显卡，实测显存占用一模一样）。一句话：**显存够就全上，不够就自己挑能塞下的层数，别管**。
+
 ### 换模型 / 调参数
 
-改 `D:\Download\AI\start-llm.vbs` 里的 `-m` 路径即可，顺手也能调 `-c`（上下文）、`-ngl`（放显卡的层数）。
+**在界面里换**：设置 → ② AI 润色 → 笔记模型，点哪张卡就换哪个档。换档会自动重启本地模型（3B/7B 约 3 秒，14B 约 9 秒），期间 AI 润色连不上是正常的。
+
+原理：一次只能装一个 gguf，所以「用哪档」记在 `<部署目录>\models\active-model.txt`（一个纯 ASCII 文件名），启动器读它决定加载谁。也可以直接改这个文件、再双击 `start-llm.vbs` 生效。
+
+其他参数（`-c` 上下文等）改 `<部署目录>\start-llm.vbs`。注意那个文件是从 `helpers\model-start-src.vbs` 生成的，软件启动本地模型之前会自动比对一次、不一致就重写 —— 所以别直接改部署目录里那份，改了会被覆盖；要长期改就改源码里那份。
 换完在应用「设置 → AI 笔记」里把模型名改成脚本里 `--alias` 对应的名字。
 
 显存参考（8 GB）：7B~8B 的 Q4 量化可以全量放进显卡；14B 要开 KV 量化并把上下文降到 8K 才塞得下。

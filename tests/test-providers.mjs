@@ -205,6 +205,33 @@ check('每个本地转写模型都声明了 CPU 精度', localAsr.every((m) => !
 // reqNote 是给买家看的，不能出现「相对实时倍数」这种只有作者看得懂的写法
 check('配置推荐写成人话（不出现倍数/术语）', localAsr.every((m) => !/[×x]\s*实时|RTF|rtf|\d+\s*倍/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
 
+/* --------------------- 本地笔记模型的四档 --------------------- */
+section('本地笔记模型的四档');
+// 老大 2026-11-05 原话：「AI润色的模型也别就一个啊，跟上面一样改一下」。
+// 2026-11-06 又加两档：「还有没有更高配置的，因为别的用户可能设备性能比我的
+// 这个要更好，都再往上再加一档吧」。
+// 实测（录音 62b4f73d 前 5997 字，同一套 llama-server 参数）：
+//   1.5B 0.92GB  12.6s  2824字  +1325MB  —— 放开到 4096 token 后自己重复、
+//                                          绕回、finish_reason=length，坏的
+//   3B   1.80GB   6.3s   991字  +2301MB  —— 结构最规整、四项要点全覆盖
+//   7B   4.36GB   7.8s   569字  +4921MB  —— 更短更凝练，但丢了「考核方式」
+//  14B   8.37GB          6.50 tok/s     —— 8GB 显存能跑，细节记得最全
+//  32B  18.49GB          （未实测）      —— 本机装不下，24GB 显存的家用机可用
+// 3B 在前 = 默认。
+const localLlm = modelsFor('local', 'llm');
+check('本地笔记有 4 档可选（3B / 7B / 14B / 32B）', localLlm.length === 4, localLlm.map((m) => m.label).join(','));
+check('默认是 3B（显存只花 2.3GB，笔记本友好）', defaultModel('local', 'llm') === 'qwen2.5-3b', defaultModel('local', 'llm'));
+// 1.5B 必须不在列表里：它不是「质量差一点」，是会自己重复绕回不收尾。
+check('跑飞的 1.5B 没进列表', !localLlm.some((m) => /1\.5[bB]/.test(m.id) || /1\.5[bB]/.test(m.label || '')), localLlm.map((m) => m.id).join(','));
+check('每档都标了推荐配置', localLlm.every((m) => !!m.reqNote), '缺 reqNote 的：' + localLlm.filter((m) => !m.reqNote).map((m) => m.label).join(','));
+check('笔记模型的配置推荐也说到显存', localLlm.every((m) => /显存|内存/.test(m.reqNote)), localLlm.map((m) => m.reqNote).join(' | '));
+check('每档都写清了模型多大', localLlm.every((m) => !!m.priceNote), localLlm.map((m) => m.priceNote).join(' | '));
+// 切模型靠 gguf 文件名写进 active-model.txt，所以每一档必须自带文件名。
+// 缺了它前端只能 toast「没法自动切换」，用户点了卡片什么也不会发生。
+check('每档都带了 gguf 文件名', localLlm.every((m) => /\.gguf$/.test(m.gguf || '')), '缺 gguf 的：' + localLlm.filter((m) => !m.gguf).map((m) => m.label).join(','));
+check('gguf 文件名与 id 对得上', localLlm.every((m) => (m.gguf || '').toLowerCase().includes(String(m.id).replace('qwen2.5-', '').toLowerCase())), localLlm.map((m) => m.id + ' -> ' + m.gguf).join(' | '));
+check('本地笔记不再标作者推荐', localLlm.every((m) => !m.recommended));
+
 /* ------------------------------ 默认模型 ------------------------------ */
 section('默认模型');
 check('硅基流动转写默认 SenseVoiceSmall', defaultModel('siliconflow', 'asr') === 'FunAudioLLM/SenseVoiceSmall');
@@ -213,7 +240,10 @@ check('OpenAI 转写默认 whisper-1', defaultModel('openai', 'asr') === 'whispe
 // 2026-11-03 起默认改成 base：四档里它是最稳的折中 ——
 // turbo 在纯 CPU 上只有 0.30×（一小时课要三小时多），拿它当默认等于默认坑没显卡的机器。
 check('局部转写默认 base（没显卡也能在 20 分钟内出稿）', defaultModel('local', 'asr') === 'onnx-community/whisper-base');
-check('局部笔记默认 qwen2.5-7b', defaultModel('local', 'llm') === 'qwen2.5-7b');
+// 2026-11-05 起本地笔记默认改成 3B：7B 常驻要 4.9GB 显存，而本地转写
+// （Whisper）和本地润色共用同一块 8GB，7B 占着之后 Whisper 只剩 3GB。
+// 3B 只花 2.3GB，实测结构还更规整（7B 反而把「考核方式」那段丢了）。
+check('局部笔记默认 3B（显存只花 2.3GB）', defaultModel('local', 'llm') === 'qwen2.5-3b');
 check('不存在的服务商返回空串', defaultModel('没有这家', 'llm') === '');
 check('默认模型一定在候选列表第一项', PROVIDERS.every((p) => ['asr', 'llm'].every((k) => {
   const list = modelsFor(p.id, k);

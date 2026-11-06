@@ -2124,6 +2124,13 @@ function renderModelPicker(kind) {
 
   const makeCard = (spec) => {
     const tier = spec.tier && TIERS[spec.tier] ? TIERS[spec.tier] : null;
+    // 本地这家的卡片不贴标签（老大 2026-11-03：「这个就不用打标签了去掉标签」）。
+    // 理由：本地转写四档、本地笔记两档，标签全是同一个「零成本」，
+    // 重复几遍等于没说；它们真正的差别 ——要不要显卡/显存多少/内存多大
+    // ——已经由下面那行配置推荐讲清了。
+    // 云端的档位徽章保留：那里 free / 便宜·够用 / 便宜·好用 / 偏贵·更好
+    // 确实在区分真实的钱和质量，撤掉等于把当初为「能比价」加的东西又拆了。
+    const plainCard = kind === 'local-whisper' || providerId === 'local';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'model-item' + (spec.id === current ? ' on' : '');
@@ -2137,20 +2144,15 @@ function renderModelPicker(kind) {
     const nameRow = document.createElement('span');
     nameRow.className = 'model-name';
     nameRow.textContent = spec.label || spec.id;
-    // 本地转写那四档不贴标签（老大 2026-11-03：「这个就不用打标签了去掉标签」）。
-    // 理由：四档全是「零成本」，同一个徽章重复四遍等于没说；而它们真正的差别
-    // ——要不要显卡、内存多大——已经由下面那行配置推荐讲清了。
-    // 云端的档位徽章保留：那里 free / 便宜·够用 / 便宜·好用 / 偏贵·更好 四档
-    // 确实在区分真实的钱和质量，撤掉等于把当初为「能比价」加的东西又拆了。
-    if (tier && kind !== 'local-whisper') {
+    if (tier && !plainCard) {
       const badge = document.createElement('span');
       badge.className = 'tier tier-' + spec.tier;
       badge.textContent = tier.label;
       nameRow.appendChild(badge);
     }
     // 「作者推荐」是背书，不是档位，所以单独一个小标签跟在档位后面。
-    // 老大 2026-10-29 点名要的（当时推荐的是 DeepSeek-V3）。本地转写不贴。
-    if (spec.recommended && kind !== 'local-whisper') {
+    // 老大 2026-10-29 点名要的（当时推荐的是 DeepSeek-V3）。本地这家不贴。
+    if (spec.recommended && !plainCard) {
       const rec = document.createElement('span');
       rec.className = 'rec';
       rec.textContent = '作者推荐';
@@ -2168,7 +2170,7 @@ function renderModelPicker(kind) {
       main.appendChild(sub);
     }
 
-    // 第三行只给本地转写模型：推荐配置（要不要显卡、内存多大）。
+    // 第三行：推荐配置（要不要显卡、显存内存多大）。
     // 为什么不并进上一行：那一行限 14 字、只讲质量（老大定的），
     // 而「独立显卡 6GB+ · 内存 16GB」是另一维的信息，两者挤一起谁都读不清。
     // 老大 2026-11-03 把这一行从「实测耗时」改成「配置推荐」，原话：
@@ -3077,15 +3079,51 @@ async function saveSettings() {
     patch.llm.apiKey = k;
   }
   try {
+    // 换本地笔记模型要重启 llama-server（一次只能装一个 gguf，而且它压根
+    // 不校验请求里的 model 字段 —— 实测随便写个名字也回 200，永远给启动时
+    // 加载的那个）。所以保存之后如果发现「本地 + 模型变了」，顺手调一次切换。
+    // 放在保存成功之后：配置没存上的话，重启成新模型反而跟界面不一致。
+    const wasLocalModel = String(state.config?.llm?.model || '');
+    const nowLocalModel = patch.llm.model;
+    const isLocalNow = id === 'local';
     const data = await api('/config', { method: 'PUT', body: patch });
     state.config = data.config;
     $('settings-modal').hidden = true;
     toast('设置已保存', 'ok');
     renderEngineTag();
+    if (isLocalNow && nowLocalModel && nowLocalModel !== wasLocalModel) {
+      await switchLocalLlm(nowLocalModel);
+    }
     return true;
   } catch (e) {
     toast('保存失败：' + e.message, 'err');
     return false;
+  }
+}
+
+/**
+ * 换本地大模型：告诉服务端「加载这个 gguf」，它会停掉旧的、用新的拉起来。
+ *
+ * 为什么要单独一次请求、而不是塞进保存配置里：换模型可能失败（那个档还没
+ * 下载），而配置该存还是要存 —— 不能因为模型没下就让用户的其它设置也丢。
+ * 失败只提示、不抛，跟上面对 saveNotePrefs 的态度一致。
+ */
+async function switchLocalLlm(modelId) {
+  const spec = modelSpec('local', 'llm', modelId);
+  const gguf = spec?.gguf || '';
+  if (!gguf) {
+    // 用户手填了别的模型名（不是预设那两档）：指针文件不管，也重启不了。
+    // 这时候说清楚就行 —— llama-server 其实不在意 model 名，真正加载的
+    // 还是上一次那个 gguf，所以功能上不算坏，只是界面和实际对不上。
+    toast('本地模型名不是预设的那两档，没法自动切换加载的文件。要换档请直接点卡片选。', '', 7000);
+    return;
+  }
+  try {
+    const r = await api('/local-llm', { method: 'POST', body: { action: 'model', gguf } });
+    if (r?.switched) toast(`正在用 ${spec.label} 重新启动本地模型，约 3 秒`, 'ok', 5000);
+    else if (r?.running === false) toast(`已记下用 ${spec.label}，下次启动本地模型时生效`, 'ok', 5000);
+  } catch (e) {
+    toast('切换本地模型失败：' + e.message, 'err', 8000);
   }
 }
 

@@ -34,17 +34,70 @@ If Not fso.FileExists(exePath) Then
   WScript.Quit 1
 End If
 
-modelPath = base & "\models\Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+' ------------------------------------------------------------
+' 加载哪个 gguf？
+'
+' 一次只能装一个模型，所以「用哪档」记在 models\active-model.txt 里，
+' 每行一个文件名（相对 models\ 目录），# 开头是注释。服务端切模型时
+' 只改这个文件、再调一次本脚本 —— 不用给 wscript 传参，用户双击
+' 这个 vbs 也照样能用（那是这个文件唯一的对外接口）。
+'
+' 读不到、或者文件里写的那个 gguf 不在，就退回 7B —— 老部署没这个
+' 文件，不能让升级一下就把本地大模型弄没了。
+' ------------------------------------------------------------
+Dim ptrFile, want
+modelPath = ""
+ptrFile = base & "\models\active-model.txt"
+If fso.FileExists(ptrFile) Then
+  Dim ts, ln
+  Set ts = fso.OpenTextFile(ptrFile, 1)
+  Do While Not ts.AtEndOfStream
+    ln = Trim(ts.ReadLine)
+    If Len(ln) > 0 And Left(ln, 1) <> "#" Then
+      want = ln
+      Exit Do
+    End If
+  Loop
+  ts.Close
+  If Len(want) > 0 Then
+    If fso.FileExists(base & "\models\" & want) Then
+      modelPath = base & "\models\" & want
+    End If
+  End If
+End If
+If Len(modelPath) = 0 Then
+  modelPath = base & "\models\Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+End If
 If Not fso.FileExists(modelPath) Then
-  MsgBox "找不到模型文件：" & vbCrLf & modelPath, 16, "讲义笔记"
+  MsgBox "找不到模型文件：" & vbCrLf & modelPath & vbCrLf & vbCrLf & _
+         "请在软件的「设置 → ⑤ 环境自检」里重新部署本地模型。", 16, "讲义笔记"
   WScript.Quit 1
 End If
 
-' -ngl 99 全部层放显卡；16K 上下文；KV 用 q8_0 省显存；--jinja 用模型自带对话模板
+' 别名取文件名去掉后缀，纯粹为了 /v1/models 和日志里能看出装的是哪个。
+' llama-server 其实不校验请求里的 model 字段（实测：随便写也回 200），
+' 所以这个名字不影响调用。
+Dim aliasName
+aliasName = fso.GetFileName(modelPath)
+If InStrRev(aliasName, ".") > 0 Then aliasName = Left(aliasName, InStrRev(aliasName, ".") - 1)
+
+' 16K 上下文；KV 用 q8_0 省显存；--jinja 用模型自带对话模板。
+'
+' ⚠ 这里**故意不写 -ngl**（不给「把所有层都放显卡」这个指令）。
+' 2026-11-06 实测：14B 在 8GB 显存上，一句 -ngl 99 会让 llama.cpp 的自动
+' 分层直接放弃 —— 日志原文
+'   common_fit_params: failed to fit params to free device memory:
+'   n_gpu_layers already set by user to 99, abort
+' 然后它退化成「大部分层跑 CPU」，速度掉到 1.05 tok/s（生成 164 个 token
+' 花了 5 分 21 秒）。同一台机器、同一个模型，不给 -ngl 让它自己算：
+' 6.50 tok/s，快 6 倍。
+' 而小模型完全不受影响（实测 3B 104.7 vs 100.0、7B 62.4 vs 56.7，
+' 显存占用一模一样）—— 显存够的时候它照样会全部层上显卡。
+' 一句话：显存够就全上显卡，不够就自己挑一个能塞下的层数，都别管。
 cmd = """" & exePath & """" & _
       " -m """ & modelPath & """" & _
-      " -c 16384 -ngl 99 --flash-attn on -ctk q8_0 -ctv q8_0" & _
-      " --host 127.0.0.1 --port 8080 --alias qwen2.5-7b -t 8 --jinja"
+      " -c 16384 --flash-attn on -ctk q8_0 -ctv q8_0" & _
+      " --host 127.0.0.1 --port 8080 --alias """ & aliasName & """ -t 8 --jinja"
 sh.CurrentDirectory = base
 sh.Run cmd, 0, False
 
