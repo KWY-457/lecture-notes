@@ -223,7 +223,7 @@ export function createOnboard({ state, onDone, onQuit }) {
     return el(
       'div',
       { class: 'modal-head onboard-head' },
-      el('h3', {}, el('span', { html: icon('sparkle') }), '第一次用，先定三件事'),
+      el('h3', {}, el('span', { html: icon('sparkle') }), 'Hi'),
       dots
     );
   }
@@ -243,8 +243,9 @@ export function createOnboard({ state, onDone, onQuit }) {
     if (ui.error) hint.append(el('span', { class: 'onboard-err', text: ui.error }));
     const btns = el('div', {});
 
+    // 第一步不给「上一步」：没有前一步可回，摆一个灰按钮只会让人以为点错了。
     const back = el('button', { class: 'btn ghost', type: 'button', text: '上一步', onclick: () => go(-1) });
-    if (STEPS.indexOf(ui.step) === 0) back.disabled = true;
+    if (STEPS.indexOf(ui.step) === 0) back.hidden = true;
 
     if (ui.step === 'agree') {
       // 协议这一步没有「上一步」—— 前面选的东西已经写进配置了，
@@ -281,10 +282,8 @@ export function createOnboard({ state, onDone, onQuit }) {
   }
 
   function nextLabel() {
-    if (ui.step === 'choose') return ui.mode === 'local' ? '选模型' : '选服务商';
-    if (ui.step === 'provider') return '填 Key';
-    if (ui.step === 'connect') return '下一步：选模型';
-    if (ui.step === 'models') return '下一步：看协议';
+    // 统一成「下一步」：之前每步写不同的字（选模型 / 填 Key / 下一步：选模型），
+    // 一行里三四种说法，看着像四种操作。真正要干什么下一步自然会说。
     return '下一步';
   }
 
@@ -303,11 +302,6 @@ export function createOnboard({ state, onDone, onQuit }) {
   /* ---------- 第 1 步：本地还是云端 ---------- */
 
   function stepChoose() {
-    const CLOUD = [
-      ['siliconflow', '硅基流动', '国内直连、注册送额度，¥0 起步', '免费额度够跑几十节课'],
-      ['openai', 'OpenAI 官方', '识别稳、要外网、按量付费', '大约 ¥1.1/小时'],
-      ['custom', '其他 / 自定义', 'DeepSeek、通义、Kimi、自建服务…', '看你接哪家'],
-    ];
     // 选中只改高亮，**不自动翻页**：点卡片就跳走会让人来不及看清自己选了什么，
     // 而且「选完就走」和「选完点下一步」两种节奏混在一起，后面几步会点乱。
     const pick = (mode) => {
@@ -325,7 +319,7 @@ export function createOnboard({ state, onDone, onQuit }) {
         el('span', { class: 'oc-icon', html: icon('box', 'lg') }),
         el('span', { class: 'oc-main' },
           el('span', { class: 'oc-title', text: '本地转写（不用联网、不花钱）' }),
-          el('span', { class: 'oc-sub', text: '录音不出这台电脑。代价是第一次要下模型，纯 CPU 上一小时课要十几分钟到一小时。' })
+          el('span', { class: 'oc-sub', text: '首次使用需下载模型。' })
         ),
         el('span', { class: 'oc-tag', text: '隐私优先' })
       ),
@@ -335,13 +329,13 @@ export function createOnboard({ state, onDone, onQuit }) {
         el('span', { class: 'oc-icon', html: icon('wifi', 'lg') }),
         el('span', { class: 'oc-main' },
           el('span', { class: 'oc-title', text: '云端 API（快，推荐）' }),
-          el('span', { class: 'oc-sub', text: '录音上传到服务商转成文字。40 分钟的课半分钟出稿，需要注册并填一把 Key。' })
+          el('span', { class: 'oc-sub', text: '录音上传到服务商转成文字。' })
         ),
         el('span', { class: 'oc-tag', text: '快' })
       )
     );
 
-    return [cards, el('p', { class: 'hint onboard-note', text: '两个都能随时在「设置 → ① 服务商」里换，这里只是选个起点。' })];
+    return [cards, el('p', { class: 'hint onboard-note', text: '可在【设置】中随时更改。' })];
   }
 
   /* ---------- 第 2 步：选服务商 ---------- */
