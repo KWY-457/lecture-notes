@@ -14,7 +14,19 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
 const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
-const app = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+/**
+ * 「谁引用了这个 id」不能只看 app.js。
+ *
+ * 2026-11-09 加了 public/onboard.js（新手引导），它的容器 `#onboard-modal` 就定义在
+ * index.html 里、只被 onboard.js 引用 —— 只扫 app.js 会把一个活得好好的元素报成死元素。
+ * 所以把 public/ 下所有前端模块都当成引用来源；worker / 老式脚本一起扫没有副作用，
+ * 反正它们引用的 id 一定也在 HTML 里。
+ */
+const SRC_FILES = fs
+  .readdirSync(path.join(ROOT, 'public'))
+  .filter((f) => f.endsWith('.js'))
+  .map((f) => path.join(ROOT, 'public', f));
+const app = SRC_FILES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 // 注意文件名是 app.css，不是 style.css。这里原来读的是 style.css（这个文件
 // 从来不存在），于是 css 恒为空串、下面「给 CSS 用的不算死」那条豁免永远
 // 不生效 —— 靠 CSS 选择器活着的元素会一直被报死。

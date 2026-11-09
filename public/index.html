@@ -498,6 +498,12 @@
 
 <!-- ============ 用户协议 / 隐私政策 ============ -->
 <!-- 首次启动时自动弹出（还不算「同意过」的话），也可以随时从设置里再打开。 -->
+<!-- ============ 新手引导 ============ -->
+<!-- 内容全部由 public/onboard.js 现场生成：七步流程各自差别很大，
+     写成静态 HTML 会变成七个 hidden 大块互相打架。
+     这里只留一个容器，方便 CSS 定位和「首次启动要不要弹」的判断。 -->
+<div class="modal onboard-modal phone-hide" id="onboard-modal" hidden></div>
+
 <div class="modal" id="agree-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">

@@ -531,6 +531,10 @@ function topicHeading(blockSentences, globalKeywords, used) {
     // 首字是数字/指示词的两字词几乎一定是碎片（第一、一点、这样、几遍）。
     // 但三字以上通常是真名词 —— 实测「三角形」在工程制图里 cov=9、打分全场第一，
     // 却被这条正则当成分条序号挡掉，导致连续两块都起不出标题。所以只对两字词生效。
+    // 纯数字（含中文数字）一律不当标题：三字以上会绕过下面那条两字限制，
+    // 实测「二零二」在思政课里 cov=3、打分压过「实验室」，起出「二零二与实验室」
+    // 这种把「二零二六年」切一半的标题。阿拉伯数字同理（6.3 这类带小数点的保留）。
+    if (/^[零一二三四五六七八九十百千万亿两点几0-9]+$/.test(t)) continue;
     if ((t.length <= 2 && HEADING_BAD_START.test(t)) || HEADING_BAD_CHAR.test(t)) continue;
     let cov = 0;
     for (const s of sents) if (s.includes(t)) cov++;

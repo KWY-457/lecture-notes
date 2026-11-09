@@ -9,6 +9,7 @@ import { cleanSegments } from './cleanup.js';
 import { outlineFromMarkdown as noteOutlineFromMarkdown } from './note.js';
 import { topicLeaves } from './mindmap.js';
 import { optionsFor, getProvider, modelsFor, defaultModel, estimateCost, PROVIDER_VERSION, sortedModels, TIERS, modelSpec } from './providers.js';
+import { createOnboard, shouldOnboard } from './onboard.js';
 
 /* ============================ 全局状态 ============================ */
 const state = {
@@ -3819,6 +3820,34 @@ async function boot() {
   await loadLectures().catch((e) => toast('读取列表失败：' + e.message, 'err'));
 
   await openFromHash();
+
+  // ── 新手引导 ──
+  // 第一次装的人先走一遍：选引擎 → 填 Key 或选模型 → 看协议。
+  // 放在协议弹窗之前，并且走引导时**跳过**后面那两个弹窗：
+  //   · 协议 —— 引导最后一步就是它，再弹一次等于让人连读两遍
+  //   · 打赏 —— 刚装完还没转过一节课就被要钱，观感很差
+  // 引导走完（或不同意退出）之前，下面的东西一个都不弹。
+  const onboard = createOnboard({
+    state,
+    onDone: async () => {
+      // 引导把 asr / llm / onboard 三处都写进服务端了，这里重新拉一份，
+      // 免得界面还拿着引导前的旧配置去渲染模型卡片。
+      try {
+        const cfg = await api('/config');
+        state.config = cfg.config;
+      } catch {}
+      try {
+        const health = await api('/health');
+        applyRemoteMode(health);
+      } catch {}
+      toast('设置好了，导入一段录音就能开始');
+    },
+    onQuit: () => {},
+  });
+  if (onboard && shouldOnboard({ state, remote: state.remote })) {
+    onboard.open();
+    return;
+  }
 
   // 还没同意过协议就先问一次。
   // 放在最后、并且不 await 阻塞其他初始化：录音列表已经能看了，协议弹窗盖在上面而已。

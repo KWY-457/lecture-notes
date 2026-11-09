@@ -13,11 +13,31 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
 const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
-const app = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+/**
+ * 除了 app.js，还要扫 public/ 下别的模块 —— 2026-11-09 加的 public/onboard.js
+ * （新手引导）会拿 #onboard-modal、#ob-key、#ob-agree-check 这些 id，
+ * 只扫 app.js 会把它们全报成「引用了但 HTML 里没有」的假错。
+ */
+const SRC_FILES = fs
+  .readdirSync(path.join(ROOT, 'public'))
+  .filter((f) => f.endsWith('.js'))
+  .map((f) => path.join(ROOT, 'public', f));
+const app = SRC_FILES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 
 /** HTML 里定义的 id */
 const defined = new Set();
 for (const m of html.matchAll(/\bid="([^"]+)"/g)) defined.add(m[1]);
+/**
+ * 还有一类 id 不在 index.html 里：**由 JS 现场创建的**。
+ * 新手引导（public/onboard.js）整块内容都是 createElement 造出来的，
+ * 里面的 #ob-key / #ob-agree-check 自然搜不到 HTML。
+ *
+ * 只认 el(...) 调用里那个 `id: 'xxx'`，别把 providers.js 里的 `id: 'Qwen/Qwen2.5-7B-Instruct'`
+ * 这类模型标识也吃进来 —— 那些不是 DOM id，混进来会把「未引用清单」冲成噪音。
+ */
+for (const m of app.matchAll(/\bel\(\s*'[a-z0-9]+',\s*\{([^}]*)\}/gi)) {
+  for (const k of m[1].matchAll(/\bid:\s*'([^']+)'/g)) defined.add(k[1]);
+}
 
 /** app.js 里引用到的 id：$('x') 以及 document.getElementById('x') */
 const used = new Map(); // id -> 出现次数

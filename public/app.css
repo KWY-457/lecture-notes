@@ -1328,3 +1328,134 @@ body.dragging::after {
 .hint.ok { color: var(--ok); }
 .hint.err { color: var(--danger); }
 .hint.mono { font-family: var(--mono); letter-spacing: .04em; }
+
+/* ============================ 新手引导 ============================ */
+/* 首次启动时弹的七步流程（public/onboard.js）。
+   不复用 .settings-body：那套的 padding 和滚动位置都是给设置面板调的，
+   引导每步高度差很大，需要一个自己的滚动容器。 */
+.onboard-modal .modal-card.onboard-card {
+  max-width: 720px;
+  width: calc(100vw - 32px);
+  max-height: 88vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.onboard-head { flex: none; }
+.onboard-dots { display: flex; gap: 5px; flex: none; }
+.onboard-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--line-2);
+  transition: background .18s var(--ease), width .18s var(--ease);
+}
+.onboard-dot.done { background: color-mix(in srgb, var(--brand) 45%, var(--line-2)); }
+.onboard-dot.now { background: var(--brand); width: 18px; border-radius: 4px; }
+
+.onboard-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 6px;
+}
+.onboard-foot { flex: none; }
+
+/* 两张「本地 / 云端」大卡，以及服务商、模型都复用这套 */
+.onboard-choices { display: flex; flex-direction: column; gap: 10px; }
+.onboard-choice {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 13px 15px;
+  text-align: left; cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  box-shadow: var(--sh-1);
+  transition: border-color .16s var(--ease), box-shadow .16s var(--ease), transform .1s var(--ease);
+}
+.onboard-choice:hover { border-color: var(--line-2); }
+.onboard-choice:active { transform: translateY(1px); box-shadow: none; }
+.onboard-choice.on {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent), var(--sh-1);
+}
+.oc-icon {
+  flex: none; width: 38px; height: 38px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.oc-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.oc-title { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.oc-sub { font-size: 12px; line-height: 1.55; color: var(--muted); }
+.oc-tag {
+  flex: none; align-self: flex-start;
+  padding: 1px 7px; border-radius: 4px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+  color: var(--brand); background: var(--brand-soft);
+}
+.onboard-note { margin: 12px 0 0; }
+
+/* 填 Key 那一步：左二维码 + 右步骤 */
+.onboard-connect { display: flex; gap: 20px; align-items: flex-start; }
+.oc-qr { flex: none; width: 180px; display: flex; flex-direction: column; gap: 7px; align-items: center; }
+.oc-qr img { width: 180px; height: 180px; border-radius: var(--r-sm); border: 1px solid var(--line); background: #fff; }
+.oc-qr .hint { text-align: center; font-size: 11.5px; }
+.oc-right { flex: 1 1 auto; min-width: 0; }
+.oc-right h4 { margin: 0 0 3px; font-size: 14.5px; }
+.oc-right > .hint { margin: 0 0 10px; }
+.oc-link { color: var(--brand); word-break: break-all; }
+.oc-link:hover { text-decoration: underline; }
+.onboard-steps {
+  margin: 0 0 12px; padding-left: 20px;
+  font-size: 12.5px; line-height: 1.7; color: var(--text-2);
+}
+.onboard-steps li { margin-bottom: 5px; }
+.onboard-steps li::marker { color: var(--muted-2); }
+
+/* 自动检测那块 */
+.onboard-auto {
+  padding: 12px 14px; margin-bottom: 14px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+.onboard-auto .btn { margin-bottom: 8px; }
+.onboard-auto-why { margin: 0; font-size: 12.5px; line-height: 1.65; color: var(--text-2); }
+.onboard-auto-why b { color: var(--text); }
+
+.onboard-models { margin-bottom: 16px; }
+.onboard-models h4 { margin: 0 0 8px; font-size: 13.5px; }
+.onboard-models h4 .hint { font-weight: 400; margin-left: 4px; }
+.onboard-models .model-list { display: flex; flex-direction: column; gap: 7px; }
+.onboard-models .model-item { width: 100%; text-align: left; }
+
+/* 协议那一步 */
+.onboard-agree { display: flex; flex-direction: column; gap: 9px; }
+.onboard-agree-text {
+  height: 240px; overflow: auto;
+  margin: 0; padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  font: 12px/1.8 var(--mono);
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+.onboard-progress { display: flex; align-items: center; gap: 9px; }
+.onboard-bar {
+  flex: 1 1 auto; height: 4px;
+  border-radius: 2px; background: var(--panel-3); overflow: hidden;
+}
+.onboard-bar > i { display: block; height: 100%; width: 0; background: var(--brand); transition: width .12s linear; }
+.onboard-progress .hint { flex: none; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.onboard-check { margin: 0; }
+.onboard-check input:disabled + * { opacity: .5; }
+.onboard-err { color: var(--danger); }
+
+@media (max-width: 600px) {
+  .onboard-connect { flex-direction: column; }
+  .oc-qr { width: 100%; }
+  .onboard-agree-text { height: 200px; }
+}

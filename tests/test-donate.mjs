@@ -104,6 +104,21 @@ async function markAgreed() {
     body: JSON.stringify({ accepted: true }),
   });
 }
+/**
+ * 把新手引导标成「已经走完」。
+ *
+ * 为什么必须这么做：引导是首次启动就盖在整页上的，而且它会 **return 掉后面的
+ * 协议窗和打赏窗**（刚装完先读协议再被要钱，观感很差）。临时数据目录是全新的，
+ * onboard.done 一定是 false → 打赏窗永远轮不到弹，这个测试的每一段都会红。
+ * 打赏功能本身没问题，是测试环境缺一步「假装老用户」。
+ */
+async function markOnboarded() {
+  await fetch(`${BASE}/api/config`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ onboard: { done: true } }),
+  });
+}
 
 // ---------- 浏览器 ----------
 let chrome = null;
@@ -171,6 +186,7 @@ async function restartAsNewLaunch() {
   clearLastShown();
   await startServer();
   await markAgreed();
+  await markOnboarded();
   await forgetBoot();
   await goto(BASE);
   await sleep(700);
@@ -182,6 +198,7 @@ async function main() {
   fs.rmSync(PROFILE, { recursive: true, force: true });
   await startServer();
   await markAgreed(); // 打赏只在协议同意后才自动弹
+  await markOnboarded(); // 且引导走完之后才轮到打赏（引导会盖住它）
   check('临时服务就绪', true, BASE);
 
   chrome = spawn(
