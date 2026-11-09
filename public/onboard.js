@@ -763,22 +763,39 @@ export function createOnboard({ state, onDone, onQuit }) {
   }
 
   /**
-   * 不同意 → 真的退出。
+   * 不同意 → 真的退出：后台停掉，窗口也关掉。
    *
    * 老大原话：「如果选不同意，则执行退出关闭页面及后台」。
-   * 服务端 /shutdown 只接受本机请求（局域网代答会被 403），
-   * 所以手机上这一步会失败 —— 但手机上根本不显示引导（.phone-hide）。
+   *
+   * 「关掉窗口」这一步之前漏了 —— 只调了 `/api/shutdown`（后台确实退了，
+   * 实测进程没了），但浏览器窗口还留在那儿显示「没有同意协议，程序已退出」，
+   * 得用户自己点 ✕。老大反馈的正是这个。
+   *
+   * 能不能关窗取决于浏览器：启动器是用 `--app=<url>` 开的窗口，那种窗口
+   * 只有一个历史条目，Chrome / Edge 都允许脚本 `window.close()` 真的关掉它。
+   * 普通标签页（用户自己把地址粘到浏览器里）会被拦，那就退回去显示提示 —— 
+   * 拦得住关窗，拦不住我告诉他该点哪儿。
    */
   async function quit() {
     try {
       await api('/shutdown', { method: 'POST' });
     } catch {}
-    // 服务 400ms 后自己退，这里先把页面换掉，别留着半个残界面
-    document.body.innerHTML =
-      '<div style="display:grid;place-items:center;height:100vh;font:15px/1.7 system-ui,sans-serif;color:#7c766a;text-align:center">' +
-      '<div><div style="width:46px;height:46px;margin:0 auto 14px;border-radius:13px;background:#e7ebf2;display:grid;place-items:center;color:#33507a">' +
-      '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
-      '</div><p>没有同意协议，程序已退出。</p><p style="font-size:13px">想重新开始，双击桌面上的「讲义笔记」就行。</p></div></div>';
+    // 先尝试自己关窗。成功的话下面这个定时器永远不会跑（页面已经销毁）。
+    let closed = false;
+    try {
+      window.close();
+      closed = true;
+    } catch {}
+    void closed;
+    setTimeout(() => {
+      // 走到这里说明 close() 没生效（普通标签页，或者浏览器策略拦了）
+      document.body.innerHTML =
+        '<div style="display:grid;place-items:center;height:100vh;font:15px/1.7 system-ui,sans-serif;color:#7c766a;text-align:center">' +
+        '<div><div style="width:46px;height:46px;margin:0 auto 14px;border-radius:13px;background:#e7ebf2;display:grid;place-items:center;color:#33507a">' +
+        '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+        '</div><p>没有同意协议，后台已经退出。</p>' +
+        '<p style="font-size:13px">这个窗口你可以直接点右上角的 ✕ 关掉。<br>想重新开始，双击桌面上的「讲义笔记」就行。</p></div></div>';
+    }, 260);
     if (onQuit) onQuit();
   }
 
