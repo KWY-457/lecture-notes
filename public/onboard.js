@@ -248,23 +248,24 @@ export function createOnboard({ state, onDone, onQuit }) {
     if (STEPS.indexOf(ui.step) === 0) back.hidden = true;
 
     if (ui.step === 'agree') {
-      // 协议这一步没有「上一步」—— 前面选的东西已经写进配置了，
-      // 退回去改会让人以为能靠「不同意」绕过授权。
       wrap.append(hint);
       const no = el('button', {
         class: 'btn ghost',
         type: 'button',
-        text: '不同意，退出',
+        text: '拒绝',
         onclick: () => quit(),
       });
       const yes = el('button', {
         class: 'btn primary',
         type: 'button',
-        text: '同意并开始使用',
+        text: '开始使用',
         onclick: () => finish(),
       });
       yes.disabled = !(ui.agreeScrolled && ui.agreeChecked) || !!ui.busy;
-      btns.append(no, yes);
+      // 协议页也留「上一步」：让人能退回去改前面选的引擎/模型。
+      // 顾虑过「退回去能绕过授权」，但配置是在 finish() 才落盘的，
+      // 没点「开始使用」就什么都没存，所以不存在绕过。
+      btns.append(back, no, yes);
       wrap.append(btns);
       return wrap;
     }
@@ -562,9 +563,6 @@ export function createOnboard({ state, onDone, onQuit }) {
     const a = state.agreement || {};
     const text = a.text || {};
     const wrap = el('div', { class: 'onboard-agree' });
-    wrap.append(
-      el('p', { class: 'hint', text: '最后一步。往下滚到底，才能勾选同意 —— 条款里写了我们怎么对待你的录音，值得花一分钟看完。' })
-    );
 
     const tabs = el('div', { class: 'tabs agree-tabs' });
     const pre = el('pre', { class: 'agree-text onboard-agree-text' });
@@ -633,7 +631,7 @@ export function createOnboard({ state, onDone, onQuit }) {
     if (c) c.disabled = !ui.agreeScrolled;
     const btns = root.querySelectorAll('.onboard-foot .btn');
     for (const b of btns) {
-      if (b.textContent.includes('同意并开始使用')) b.disabled = !(ui.agreeScrolled && ui.agreeChecked) || !!ui.busy;
+      if (b.textContent.includes('开始使用')) b.disabled = !(ui.agreeScrolled && ui.agreeChecked) || !!ui.busy;
     }
   }
 
@@ -680,7 +678,16 @@ export function createOnboard({ state, onDone, onQuit }) {
       return;
     }
     // 上一步
-    if (ui.step === 'agree') return; // 协议不给退
+    if (ui.step === 'agree') {
+      // 协议页能退回：配置要等 finish() 才落盘，没点「开始使用」就什么都没存。
+      // 但状态必须清干净 —— 勾过同意再退回来，复选框是新建的（没勾），
+      // 若 ui.agreeChecked 还留着 true，滚到底就能直接点「开始使用」，等于绕过勾选。
+      ui.agreeScrolled = false;
+      ui.agreeChecked = false;
+      ui.step = 'models';
+      render();
+      return;
+    }
     if (ui.step === 'models' && ui.mode === 'local') {
       ui.step = 'choose';
       render();
