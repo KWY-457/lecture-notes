@@ -2165,7 +2165,10 @@ function renderModelPicker(kind) {
 
     // 第二行：只放一句质量说明（价格由档位徽章负责，具体金额在教程第七章）。
     // priceNote 现在只剩「模型多大」这类硬事实，本地 Whisper 那几张才有。
-    const subBits = [spec.priceNote, spec.qualityNote].filter(Boolean);
+    // paramNote 是 2026-11-11 给本地 Whisper 补的参数量（74M / 244M / 809M）——
+    // Qwen 那边的型号名自带「3b/7b」，Whisper 的名字（tiny/base/small）一个
+    // 数字都没有，光看体积还是不知道它多小。
+    const subBits = [spec.priceNote, spec.paramNote, spec.qualityNote].filter(Boolean);
     if (subBits.length) {
       const sub = document.createElement('span');
       sub.className = 'model-sub';

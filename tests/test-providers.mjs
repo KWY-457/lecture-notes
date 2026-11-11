@@ -190,6 +190,32 @@ const localAsr = modelsFor('local', 'asr');
 check('本地转写有 4 档可选', localAsr.length === 4, localAsr.map((m) => m.label).join(','));
 check('每档都标了推荐配置', localAsr.every((m) => !!m.reqNote), '缺 reqNote 的：' + localAsr.filter((m) => !m.reqNote).map((m) => m.label).join(','));
 check('每档都写清了模型多大', localAsr.every((m) => !!m.priceNote), '缺 priceNote 的：' + localAsr.filter((m) => !m.priceNote).map((m) => m.label).join(','));
+// 2026-11-11 补：老大问「为什么转写模型不像润色模型那样展示模型名称及几b」。
+// 查下来不是漏字段 —— Whisper 官方名就是 tiny/base/small/large-v3-turbo，
+// 一个数字都没有（Qwen 那边叫 qwen2.5-3b，名字里天然带参数）。所以补 paramNote。
+// 断言三层：每档都有 / 都是「数字+M 参数」/ 四档严格递增（写错位数会立刻暴露）。
+check('每档都标了参数量', localAsr.every((m) => !!m.paramNote), '缺 paramNote 的：' + localAsr.filter((m) => !m.paramNote).map((m) => m.label).join(','));
+check('参数量写成「39M 参数」这种硬事实', localAsr.every((m) => /^\d+M 参数$/.test(m.paramNote || '')), localAsr.map((m) => `${m.label}=${m.paramNote}`).join(' | '));
+const params = localAsr.map((m) => parseInt((m.paramNote || '0').replace(/[^\d]/g, ''), 10));
+// 注意 asrModels 里的书写顺序是 base / tiny / small / turbo（不是从小到大），
+// 所以不能按数组顺序断言递增 —— 第一版这么写直接假红一条。改成按 id 逐个对。
+const OFFICIAL = {
+  'onnx-community/whisper-tiny': 39,
+  'onnx-community/whisper-base': 74,
+  'onnx-community/whisper-small': 244,
+  'onnx-community/whisper-large-v3-turbo': 809,
+};
+const mismatch = localAsr.filter((m) => {
+  const want = OFFICIAL[m.id];
+  const got = parseInt((m.paramNote || '0').replace(/[^\d]/g, ''), 10);
+  return want === undefined || got !== want;
+});
+check(
+  '参数量与官方公布值一致（tiny 39M / base 74M / small 244M / turbo 809M）',
+  mismatch.length === 0,
+  mismatch.map((m) => `${m.label}=${m.paramNote}（应为 ${OFFICIAL[m.id]}M）`).join(' | ') || params.join(',')
+);
+check('参数量四档互不相同', new Set(params).size === 4, params.join(','));
 // 配置推荐得真的说到内存，否则「内存多少」这句要求就没满足。
 // 2026-11-11 起口径变了（老大原话：「前面几个不用显卡那就显示内存需求多少就行了，
 // 不用显卡删掉」）—— 不依赖显卡的三档只写内存，不再啰嗦「不用显卡」；

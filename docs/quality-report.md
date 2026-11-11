@@ -977,7 +977,26 @@ Word 版本（`docs/quality-report.docx`）由一个约 200 行的转换脚本�
 
 `_scratch/shot-onboard.mjs` 新增 **B 组（本地分支）8 条断言**：自动检测按钮文案、下面小字文案、点下去真出结论和理由、本地铺出四档、四档都不再出现「较快/最快/最准/均衡/能读/精度一般」、不依赖显卡的三档 `reqNote` 必须以「内存 」开头（即不含「不用显卡」）、turbo 仍然写独立显卡、本地四档仍然不贴徽章。原来这个探针只走了云端分支（云端卡片本来就没有第二三行），所以老大截图里看到的问题它一条都抓不到 —— 这是它自己的盲区，补上后 **53 通过 / 0 失败**。截图 `_scratch/onboardshot/B1-local-models.png`。
 
-> 真浏览器里看 `B1-local-models.png`：四张卡现在是 `base / 172MB / 内存 4GB`、`tiny / 96MB / 内存 2GB`、`small / 521MB / 内存 4GB`、`large-v3-turbo / 1.9GB / 独立显卡 6GB+ · 内存 16GB`。
+> 真浏览器里看 `B1-local-models.png`：四张卡现在是 `base / 172MB · 74M 参数 / 内存 4GB`、`tiny / 96MB · 39M 参数 / 内存 2GB`、`small / 521MB · 244M 参数 / 内存 4GB`、`large-v3-turbo / 1.9GB · 809M 参数 / 独立显卡 6GB+ · 内存 16GB`。
+
+**⑫ 转写卡片补参数量（2026-11-11 追加，老大追问：「还有为什么转写模型不像润色模型那样展示模型名称及几b」）。**
+
+查下来**不是漏字段，是两家官方命名习惯不同**：`public/providers.js` 里两组的 `label` 都直接照抄官方型号名 —— 润色那组是 `qwen2.5-3b` / `7b` / `14b` / `32b`（Qwen 官方名字里天然带参数量），转写那组是 `base` / `tiny` / `small` / `large-v3-turbo`（**Whisper 官方命名一个数字都没有**，最小叫 tiny、最大叫 large）。没有一处是人为写死的差别。
+
+但「光看 base 不知道它多小」是真问题，所以补 `paramNote` 字段（不并进 `priceNote`：引导页拿 `priceNote` 拼「会开始下载（172MB）」，混进参数量会变成「下载（172MB · 74M 参数）」，那句就说不通了）：
+
+| 档 | priceNote | paramNote |
+| --- | --- | --- |
+| tiny | 96MB | 39M 参数 |
+| base | 172MB | 74M 参数 |
+| small | 521MB | 244M 参数 |
+| large-v3-turbo | 1.9GB | 809M 参数 |
+
+数字取自 Whisper 官方公布值（turbo 是 large-v3 砍到 4 层解码器，所以 809M 比 large 的 1550M 小）。渲染侧两处都跟着改：`public/app.js` 的 `makeCard()` 与 `public/onboard.js` 的 `modelCard()`，第二行 `subBits` 从 `[priceNote, qualityNote]` 变成 `[priceNote, paramNote, qualityNote]`。
+
+`tests/test-providers.mjs` **99 通过 / 0 失败**（+4：每档都有 paramNote / 格式是「数字M 参数」/ **按 id 逐个对官方值** / 四档数字互不相同）。探针 `_scratch/shot-onboard.mjs` **55 通过 / 0 失败**（+2：第二行含「N M 参数」/ 四档数字与档位对得上）。截图 `_scratch/onboardshot/B1-local-models.png`。
+
+> **坑**：第一版断言写的是「参数量随档位严格递增」，**假红** —— `asrModels` 数组的书写顺序是 base / tiny / small / turbo（base 74M 排在 tiny 39M 前面，是当年按「默认档放第一个」排的，不是按大小排）。改成拿 `OFFICIAL` 表按 id 逐个比才对。
 
 ---
 

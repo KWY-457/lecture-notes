@@ -276,12 +276,22 @@ export const PROVIDERS = [
     // 因此只留四档，medium 整条删除：它在两种设备上都跑不起来，留着就是给用户埋坑。
     // 默认值也从 turbo 改成 base —— 没显卡的电脑占绝大多数，选 turbo 等于默认让他等三小时。
     // 有显卡的用户换 turbo 只多一次下载，反而不会被默认值坑。
+    // ★ 2026-11-11 补 paramNote（老大：「为什么转写模型不像润色模型那样展示
+    // 模型名称及几b」）。查下来不是漏字段 —— 两组的 label 都是照抄官方型号名，
+    // 只是命名习惯不同：Qwen 官方就叫 qwen2.5-3b/7b（名字里天然带参数），
+    // Whisper 官方就叫 tiny/base/small/large-v3-turbo（一个数字都没有）。
+    // 光看「base」不知道它到底多小，所以补一行参数量。数字取自 Whisper 官方
+    // 公布值：tiny 39M / base 74M / small 244M / large-v3-turbo 809M
+    // （turbo 是 large-v3 砍到 4 层解码器，所以比 large 的 1550M 小）。
+    // 不塞进 priceNote：引导页拿 priceNote 拼「会开始下载（172MB）」，混进
+    // 参数量会变成「下载（172MB · 74M 参数）」，那句就说不通了。
     asrModels: [
       {
         id: 'onnx-community/whisper-base',
         label: 'base',
         tier: 'free',
         priceNote: '172MB',
+        paramNote: '74M 参数',
         // 2026-11-11 老大看引导第 4 步的截图后要求：「下面每个模型下面的小字
         // 什么最快，较快那些全部删掉」—— 速度/精度这类形容词对挑模型没有帮助，
         // 留下体积和内存需求两行硬事实就够。
@@ -296,6 +306,7 @@ export const PROVIDERS = [
         label: 'tiny',
         tier: 'free',
         priceNote: '96MB',
+        paramNote: '39M 参数',
         reqNote: '内存 2GB',
         cpuDtype: 'q8',
         gpuDtype: 'fp16',
@@ -305,6 +316,7 @@ export const PROVIDERS = [
         label: 'small',
         tier: 'free',
         priceNote: '521MB',
+        paramNote: '244M 参数',
         reqNote: '内存 4GB',
         cpuDtype: 'q8',
         // 同上：GPU/fp16 输出空、GPU/q8 只有 0.17×，CPU 才是它的正确位置
@@ -315,6 +327,7 @@ export const PROVIDERS = [
         label: 'large-v3-turbo',
         tier: 'free',
         priceNote: '1.9GB',
+        paramNote: '809M 参数',
         reqNote: '独立显卡 6GB+ · 内存 16GB',
         cpuDtype: 'q8',
         gpuDtype: 'fp16',

@@ -546,7 +546,7 @@ export function createOnboard({ state, onDone, onQuit }) {
     const nameRow = el('span', { class: 'model-name', text: spec.label || spec.id });
     if (spec.tier && !plain && TIERS[spec.tier]) nameRow.append(el('span', { class: 'tier tier-' + spec.tier, text: TIERS[spec.tier].label }));
     const main = el('span', { class: 'model-main' }, nameRow);
-    const sub = [spec.priceNote, spec.qualityNote].filter(Boolean);
+    const sub = [spec.priceNote, spec.paramNote, spec.qualityNote].filter(Boolean);
     if (sub.length) main.append(el('span', { class: 'model-sub', text: sub.join(' · ') }));
     if (spec.reqNote) main.append(el('span', { class: 'model-speed', text: spec.reqNote }));
     return el(
