@@ -58,6 +58,9 @@ class El {
   }
   get className() { return this._class; }
   set className(v) { this._class = String(v || ''); this.classList.set = new Set(this._class.split(/\s+/).filter(Boolean)); }
+  /* 真实 DOM 里叫 parentNode，影子层内部一直写的是 parent。
+     断言「某颗按钮挂在哪个容器里」用的是 parentNode，不补上就永远读不到。 */
+  get parentNode() { return this.parent; }
   get innerHTML() { return this._html; }
   set innerHTML(v) { this._html = String(v ?? ''); this.children = []; }
   appendChild(n) { n.parent = this; this.children.push(n); return n; }
@@ -156,6 +159,14 @@ for (const m of html.matchAll(/<([a-zA-Z][\w-]*)([^>]*?)\bid="([^"]+)"([^>]*)>/g
   if (/\bhidden\b/.test(attrs)) node.hidden = true;
   const val = /\bvalue="([^"]*)"/.exec(attrs);
   if (val) node.value = val[1];
+  /* class 和 title 也要读。原来只建 id + 文字，于是「这个按钮是不是挂在 .pane-head
+     里」「title 写的是什么」「是不是带 phone-hide」这类断言读到的一律是空串，
+     测试红在产品没错上（2026-11-11 加笔记面板那颗按钮时踩到了）。
+     注意这里只能给出**声明时**的 class，运行时 classList.add 的是另一回事。 */
+  const cls = /\bclass="([^"]*)"/.exec(attrs);
+  if (cls) node.className = cls[1];
+  const ttl = /\btitle="([^"]*)"/.exec(attrs);
+  if (ttl) node.title = ttl[1];
   /* 元素自己的文字也要抓出来。
      原来只建了空节点 —— 于是任何「按钮上写的是不是这几个字」的断言都读到空串，
      测试红在产品没错上（2026-10-24 改按钮名时踩到了：「重新生成笔记」「AI 润色」
@@ -165,7 +176,47 @@ for (const m of html.matchAll(/<([a-zA-Z][\w-]*)([^>]*?)\bid="([^"]+)"([^>]*)>/g
   const rest = html.slice(m.index + m[0].length);
   const inner = rest.match(/^([\s\S]*?)<\//);
   if (inner) node.textContent = inner[1].replace(/<[^>]*>/g, '').trim();
+  /* 内联 SVG 的引用（<use href="#i-sliders"/>）也要留在 innerHTML 里：
+     断言「这颗按钮用的是不是滑杆图标」只能靠它，而真实 DOM 里 innerHTML
+     天然含这段。影子层原本一律是空串。 */
+  node._html = inner ? inner[1] : '';
   doc.ids.set(m[3], node);
+}
+/* index.html 的父子关系要接上：断言「这个按钮挂在 .pane-head 里」需要 parentNode。
+   逐行扫 id 所在的标签，取它前面最近的、还没闭合的祖先标签。
+   这是简化版（不处理自闭合与外层同名标签），对这个 index.html 够用。 */
+{
+  const stack = [];
+  const tg = /<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g;
+  let m2;
+  while ((m2 = tg.exec(html))) {
+    const [, closing, tag, attrs, selfClose] = m2;
+    if (closing) {
+      // 弹到第一个同名标签为止（容忍结构不完全嵌套）
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === tag) { stack.length = i; break; }
+      }
+      continue;
+    }
+    const idm = /\bid="([^"]+)"/.exec(attrs);
+    let node = idm ? doc.ids.get(idm[1]) : null;
+    /* 没有 id 的元素也建一个匿名节点（只要带了 class）。
+       .pane-head / .li-actions 这类容器本来就没 id，而「某颗按钮是不是挂在这个
+       容器里」正是要断言的 —— 不建的话 parentNode 一路都是 null。 */
+    if (!node) {
+      const c = /\bclass="([^"]*)"/.exec(attrs);
+      if (c) { node = new El(tag); node.className = c[1]; }
+    }
+    if (node) {
+      // 最近的祖先是 stack 里有人有 id 的那个
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].node) { node.parent = stack[i].node; stack[i].node.children.push(node); break; }
+      }
+    }
+    if (!selfClose && !/^(br|img|input|hr|meta|link|use|path|circle|rect)$/i.test(tag)) {
+      stack.push({ tag, node });
+    }
+  }
 }
 /* 下拉框要真的带 options：app.js 判断「自适应在不在」「三档风格齐不齐」
    都是遍历 option。影子层不给的话，凡是碰下拉内容的断言都会假红。
@@ -498,9 +549,17 @@ if (lecture) {
      这三项改成「每条录音各自定义」，所以必须：① 弹窗存在且默认是关的；
      ② 打开后三样控件都在、有合理默认值；③ 创建返回的值能落到 meta 上。 */
   check('新建录音弹窗默认关着', doc.getElementById('new-lecture-modal').hidden === true, '');
-  // 「笔记设置」的入口只剩侧栏每行的「⋯」这一个。工具栏和笔记面板右上角那两个
-  // 都删了（2026-10-23 晚），这里各留一条断言，避免以后又长回来变成三个入口。
+  // 「笔记设置」的入口：工具栏那个旧的已删（2026-10-23 晚），笔记面板右上角的旧
+  // chip 也删过；2026-11-11 老大要求「在单个录音界面里也能打开这个界面，方便随时
+  // 修改」，于是在笔记面板头上新加了一个 #btn-pane-prefs（不是把旧 chip 复活 ——
+  // 新按钮挂在 .pane-head 里、手机上隐藏、hover 才显字）。
   check('工具栏的旧「笔记设置」按钮已撤掉', doc.getElementById('btn-note-prefs') === null, '');
+  const panePrefs = doc.getElementById('btn-pane-prefs');
+  check('笔记面板头上有「笔记设置」入口', !!panePrefs, panePrefs ? '有' : '不存在');
+  check('这个入口挂在 .pane-head 里', !!panePrefs && !!panePrefs.parentNode && String(panePrefs.parentNode.className).includes('pane-head'), panePrefs && panePrefs.parentNode ? String(panePrefs.parentNode.className) : '');
+  check('这个入口的 title 写着改笔记设置', !!panePrefs && /笔记设置/.test(panePrefs.title || ''), panePrefs ? panePrefs.title : '');
+  check('这个入口用的是滑杆图标', !!panePrefs && String(panePrefs.innerHTML).includes('#i-sliders'), panePrefs ? String(panePrefs.innerHTML).slice(0, 80) : '');
+  check('这个入口手机上藏起来（手机端只负责上传）', !!panePrefs && String(panePrefs.className).includes('phone-hide'), panePrefs ? String(panePrefs.className) : '');
   // 侧栏每一行都要有一个「⋯」：平时三个点，鼠标悬浮才显出「编辑」两个字。
   // 这是「改这条录音的笔记设置」最顺手的入口 —— 不用先打开录音。
   //

@@ -139,11 +139,16 @@ check(
   '有模型缺 tier 的服务商：' +
     PROVIDERS.flatMap((p) => ['asr', 'llm'].flatMap((k) => modelsFor(p.id, k).filter((m) => !m.tier).map((m) => `${p.id}/${m.id}`))).join(',')
 );
+// 2026-11-11 起本地转写四档不再写 qualityNote（老大看引导截图后要求
+// 「下面每个模型下面的小字什么最快，较快那些全部删掉」）—— 那四张卡只剩
+// 体积与内存需求两行硬事实。所以这条断言把本地转写排除在外。
+const needQuality = (p, k) =>
+  modelsFor(p.id, k).filter((m) => !(p.id === 'local' && k === 'asr'));
 check(
   '每张卡片都有质量说明',
-  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => modelsFor(p.id, k).every((m) => !!m.qualityNote))),
+  PROVIDERS.every((p) => ['asr', 'llm'].every((k) => needQuality(p, k).every((m) => !!m.qualityNote))),
   '缺 qualityNote 的：' +
-    PROVIDERS.flatMap((p) => ['asr', 'llm'].flatMap((k) => modelsFor(p.id, k).filter((m) => !m.qualityNote).map((m) => `${p.id}/${m.id}`))).join(',')
+    PROVIDERS.flatMap((p) => ['asr', 'llm'].flatMap((k) => needQuality(p, k).filter((m) => !m.qualityNote).map((m) => `${p.id}/${m.id}`))).join(',')
 );
 // 2026-10-29 老大定：卡片第二行只讲生成质量，不讲价格（收费与否已经由档位徽章说完了）。
 // priceNote 只剩「模型多大」这类硬事实（本地 Whisper 那三张），没有就留空。
@@ -185,9 +190,21 @@ const localAsr = modelsFor('local', 'asr');
 check('本地转写有 4 档可选', localAsr.length === 4, localAsr.map((m) => m.label).join(','));
 check('每档都标了推荐配置', localAsr.every((m) => !!m.reqNote), '缺 reqNote 的：' + localAsr.filter((m) => !m.reqNote).map((m) => m.label).join(','));
 check('每档都写清了模型多大', localAsr.every((m) => !!m.priceNote), '缺 priceNote 的：' + localAsr.filter((m) => !m.priceNote).map((m) => m.label).join(','));
-// 配置推荐得真的说到显卡和内存，否则「什么GPU，内存多少」这句要求就没满足。
-check('配置推荐里提到了显卡', localAsr.every((m) => /显卡|GPU/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
-check('配置推荐里提到了内存', localAsr.every((m) => /内存/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
+// 配置推荐得真的说到内存，否则「内存多少」这句要求就没满足。
+// 2026-11-11 起口径变了（老大原话：「前面几个不用显卡那就显示内存需求多少就行了，
+// 不用显卡删掉」）—— 不依赖显卡的三档只写内存，不再啰嗦「不用显卡」；
+// 需要显卡的 turbo 仍然要写明显卡门槛，别把没显卡的人骗进去。
+check('每档都写清了内存需求', localAsr.every((m) => /内存/.test(m.reqNote)), localAsr.map((m) => m.reqNote).join(' | '));
+check(
+  '不依赖显卡的三档不提显卡',
+  localAsr.filter((m) => m.gpuDtype === null).every((m) => !/显卡/.test(m.reqNote)),
+  localAsr.filter((m) => m.gpuDtype === null).map((m) => `${m.label}=${m.reqNote}`).join(' | ')
+);
+check(
+  '要显卡的 turbo 写明了显卡门槛',
+  /独立显卡/.test(localAsr.find((m) => /turbo/.test(m.id))?.reqNote || ''),
+  localAsr.map((m) => `${m.label}=${m.reqNote}`).join(' | ')
+);
 // 本地转写不再打「零成本」档位徽章和「作者推荐」标签（老大 m29061：「这个就不用打标签了去掉标签」）。
 // 但 tier 字段不能删 —— 排序（sortedModels）还靠它。只要求别标 recommended。
 check('本地转写不再标作者推荐', localAsr.every((m) => !m.recommended), localAsr.filter((m) => m.recommended).map((m) => m.label).join(','));

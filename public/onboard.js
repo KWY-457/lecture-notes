@@ -465,7 +465,7 @@ export function createOnboard({ state, onDone, onQuit }) {
       const autoBtn = el('button', {
         class: 'btn ghost',
         type: 'button',
-        text: ui.auto ? '重新检测' : '自动检测这台电脑',
+        text: ui.auto ? '重新检测' : '自动检测',
         onclick: async () => {
           ui.busy = '检测中…';
           render();
@@ -486,7 +486,7 @@ export function createOnboard({ state, onDone, onQuit }) {
         );
       } else {
         detectBox.append(
-          el('p', { class: 'hint', text: '不知道选哪个就点这个 —— 它看内存和显卡替你挑，挑完会告诉你为什么。' })
+          el('p', { class: 'hint', text: '根据配置自动选择' })
         );
       }
       parts.push(detectBox);

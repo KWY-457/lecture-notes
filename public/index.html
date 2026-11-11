@@ -194,6 +194,11 @@
               <button class="tab active" id="tab-note"><svg class="i sm"><use href="#i-pencil"/></svg>笔记</button>
               <button class="tab" id="tab-mindmap"><svg class="i sm"><use href="#i-nodes"/></svg>思维导图</button>
             </span>
+            <!-- 笔记设置的第二站：侧栏那个「⋯」只在列表里能看到，进了这条录音
+                 想改风格/重点条数就得先退出去，等于让人记住「要改设置得先关掉」。
+                 钉在笔记面板头上 —— 它改的就是这块面板里的东西。窄屏时 tab 和
+                 它留在第一行，来源说明整行落到下面（见 @media 里的 flex-wrap）。 -->
+            <button class="btn ghost tiny note-prefs-btn phone-hide" id="btn-pane-prefs" title="改这条录音的笔记设置"><svg class="i sm"><use href="#i-sliders"/></svg><span class="lbl">笔记设置</span></button>
             <span class="tx-reopen" id="tx-reopen" hidden>
               <button class="btn ghost tiny" id="btn-tx-expand" title="把逐字稿面板展开回来"><svg class="i sm"><use href="#i-file"/></svg>展开逐字稿</button>
             </span>

@@ -282,8 +282,10 @@ export const PROVIDERS = [
         label: 'base',
         tier: 'free',
         priceNote: '172MB',
-        qualityNote: '较快，能读',
-        reqNote: '不用显卡 · 内存 4GB',
+        // 2026-11-11 老大看引导第 4 步的截图后要求：「下面每个模型下面的小字
+        // 什么最快，较快那些全部删掉」—— 速度/精度这类形容词对挑模型没有帮助，
+        // 留下体积和内存需求两行硬事实就够。
+        reqNote: '内存 4GB',
         cpuDtype: 'q8',
         // GPU 上 fp16 是乱码（2.7 秒「跑完」120 秒音频，根本没在编码），q8 又只有 0.50×
         // 远不如 CPU 的 2.97× —— 这个模型在显卡上跑不了，null 让 worker 直接用 CPU。
@@ -294,8 +296,7 @@ export const PROVIDERS = [
         label: 'tiny',
         tier: 'free',
         priceNote: '96MB',
-        qualityNote: '最快，精度一般',
-        reqNote: '不用显卡 · 内存 2GB',
+        reqNote: '内存 2GB',
         cpuDtype: 'q8',
         gpuDtype: 'fp16',
       },
@@ -304,8 +305,7 @@ export const PROVIDERS = [
         label: 'small',
         tier: 'free',
         priceNote: '521MB',
-        qualityNote: '准确与速度均衡',
-        reqNote: '不用显卡 · 内存 4GB',
+        reqNote: '内存 4GB',
         cpuDtype: 'q8',
         // 同上：GPU/fp16 输出空、GPU/q8 只有 0.17×，CPU 才是它的正确位置
         gpuDtype: null,
@@ -315,7 +315,6 @@ export const PROVIDERS = [
         label: 'large-v3-turbo',
         tier: 'free',
         priceNote: '1.9GB',
-        qualityNote: '最准，用显卡时很快',
         reqNote: '独立显卡 6GB+ · 内存 16GB',
         cpuDtype: 'q8',
         gpuDtype: 'fp16',
@@ -404,7 +403,7 @@ export const PROVIDERS = [
     setup: [
       '转写：什么都不用装。第一次转写会自动从 hf-mirror 下载 Whisper 模型，下过一次就留在本地。',
       '笔记：设置 → ⑤ 环境自检 →「部署本地模型」，一键装好 llama-server 和 Qwen2.5。',
-      '不知道选哪个转写模型就看卡片上最后一行：不要显卡的 base / small 大多数电脑都能跑，tiny 更快但错字多，large-v3-turbo 要有独立显卡才划算。',
+      '不知道选哪个转写模型就看卡片上最后一行：只要求 2~4GB 内存的 base / small 大多数电脑都能跑，tiny 更快但错字多，large-v3-turbo 要有独立显卡才划算。',
       '切笔记模型会让本地大模型重启一次（两三秒），因为一次只能装一个模型。',
     ],
   },

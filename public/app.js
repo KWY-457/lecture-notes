@@ -1690,7 +1690,9 @@ async function editNotePrefs(id) {
     }
     await loadLectures();
     renderList();
-    toast(isCurrent ? '笔记设置已保存' : `「${pick.title}」的笔记设置已保存`, 'ok');
+    // 只改偏好不动已有笔记，所以得告诉人下一步该按哪个按钮 ——
+    // 否则改完风格回来看笔记没变，会以为没保存成功。
+    toast((isCurrent ? '笔记设置已保存' : `「${pick.title}」的笔记设置已保存`) + '，点「重新生成笔记」按新设置重做', 'ok', 6000);
   } catch (e) {
     toast('保存失败：' + e.message, 'err');
   }
@@ -3389,9 +3391,11 @@ function bind() {
   $('btn-transcribe').onclick = doTranscribe;
   $('btn-notes').onclick = () => doNotes(false);
   $('btn-notes-ai').onclick = () => doNotes(true);
-  // 「笔记设置」不再有工具栏入口（2026-10-23 晚删的），唯一入口是侧栏每行的
-  // 「⋯」—— 见 renderList() 里的 li-edit 按钮，点了走 editNotePrefs(id)。
+  // 「笔记设置」有两个入口：侧栏每行的「⋯」（renderList() 里的 li-edit），
+  // 和笔记面板头上这个按钮。后者是给「已经进到这条录音里」的人用的 ——
+  // 想改风格还得先退回列表实在太绕，而这块面板正是被那些设置决定的东西。
   // 录完之后才发现风格选错也不怕：不用重录，只改偏好、不动已有笔记。
+  $('btn-pane-prefs').onclick = () => editNotePrefs(state.current?.lecture?.id);
   $('tab-note').onclick = () => {
     state.view = 'note';
     $('tab-note').classList.add('active');
