@@ -2436,15 +2436,170 @@ async function openSettings() {
   renderAbout();
   $('settings-modal').hidden = false;
   runDiagnostics();
+  // 顺手查一次（silent）：服务端 6 小时节流，多数时候只是把上次结果取回来，
+  // 一个请求都不发。失败也不打扰 —— 打开设置是为了改设置，不是来看报错的。
+  checkUpdate({ silent: true }).catch(() => {});
 }
 
 /* ---------------------- 用户协议 / 隐私政策 ---------------------- */
 
 
+/**
+ * 自动更新：查 / 下 / 装，全在设置面板的「⑤ 关于与协议」里。
+ *
+ * 为什么不用一个独立的「有新版本！」弹窗：
+ *   软件是给人上课用的，弹窗只会打断人。查到新版在「关于」里挂一行，
+ *   用户什么时候想更就更。真正装的时候才必须打断 —— 因为要退出程序。
+ *
+ * 三步顺序是物理约束，不是风格：node.exe 跑着时安装包写不进去，
+ * 所以「下载 → 退出 → 装」这个顺序不能换（见 server.mjs 的 applyUpdate 注释）。
+ */
+const updateState = {
+  busy: '',          // '' | 'checking' | 'downloading' | 'installing'
+  info: null,        // 最后一次 /update/check 的结果
+  downloaded: null,  // { name, sizeText, version }
+};
+
+/** 把跑着的任务画到按钮和状态行上。界面永远能看出「现在在干嘛」。 */
+function renderUpdateBox() {
+  const box = $('update-box');
+  if (!box) return;
+  const info = updateState.info;
+  const show = !!info && (info.hasUpdate || !!updateState.downloaded || updateState.busy === 'installing');
+  box.hidden = !show;
+  if (!show) return;
+
+  const title = $('update-title');
+  const sub = $('update-sub');
+  const notes = $('update-notes');
+  const status = $('update-status');
+  const btnInstall = $('btn-update-install');
+  const btnIgnore = $('btn-update-ignore');
+  const btnPage = $('btn-update-page');
+
+  const latest = info.latest || updateState.downloaded?.version || '';
+  title.textContent = latest ? `新版本 ${latest}` : '有新版本';
+
+  const bits = [];
+  if (info.publishedAt) {
+    const d = info.publishedAt.slice(0, 10);
+    if (d) bits.push(`${d} 发布`);
+  }
+  if (info.installer?.sizeText) bits.push(`安装包 ${info.installer.sizeText}`);
+  sub.textContent = bits.join(' · ');
+
+  // 更新说明是 Markdown（作者在 Releases 里怎么写就怎么显示）。
+  // 直接塞 <pre> 会把 `## 这一版改了什么` 原样露给用户看，所以过一遍渲染器。
+  if (info.notes) {
+    notes.innerHTML = renderMarkdown(info.notes);
+    notes.hidden = false;
+  } else {
+    notes.textContent = '';
+    notes.hidden = true;
+  }
+
+  // 「能不能一键装」是服务端判的：绿色版的数据在程序目录里，没有安装位置可覆盖
+  const canInstall = info.canInstall !== false;
+  btnInstall.hidden = !canInstall;
+  btnIgnore.hidden = !canInstall;
+  // 绿色版 / 没有更新脚本时，只能给一个下载页链接
+  btnPage.hidden = canInstall && !!info.installer;
+
+  const downloading = updateState.busy === 'downloading';
+  const installing = updateState.busy === 'installing';
+  btnInstall.disabled = downloading || installing;
+  btnIgnore.disabled = downloading || installing;
+  if (installing) btnInstall.textContent = '正在退出并安装…';
+  else if (downloading) btnInstall.textContent = '正在下载…';
+  else if (updateState.downloaded) btnInstall.textContent = '立即安装';
+  else btnInstall.textContent = '下载并安装';
+
+  if (updateState.busy === 'installing') status.textContent = '装完会自动打开，别急着点。';
+  else if (downloading) status.textContent = '下载中可以关掉设置，装好会提示。';
+  else if (updateState.downloaded) status.textContent = '安装包已就绪，点「立即安装」会先退出再装。';
+  else status.textContent = canInstall ? '' : '这一份是绿色版，请到下载页手动替换。';
+}
+
+/**
+ * 检查更新。`silent` = 打开设置时顺手查一次，失败不打扰人。
+ *
+ * 每次打开设置都查会有两个坏处：网慢时设置面板要转半天、频繁打同一个源。
+ * 服务端已经有 6 小时节流（shouldCheck），所以这里放心地每次都问 ——
+ * 绝大多数时候它只是把上次的结果回给我们，一个字节都没发出去。
+ */
+async function checkUpdate({ silent = false, force = false } = {}) {
+  if (updateState.busy) return;
+  updateState.busy = 'checking';
+  if (!silent) $('btn-check-update').textContent = '检查中…';
+  try {
+    const r = await api(`/update/check${force ? '?force=1' : ''}`, { method: 'POST', body: {} });
+    updateState.info = r;
+    if (!silent) {
+      if (r.error) toast('检查更新失败：' + r.error);
+      else if (!r.hasUpdate) toast('已经是最新版本');
+    }
+  } catch (e) {
+    if (!silent) toast('检查更新失败：' + e.message);
+  } finally {
+    updateState.busy = '';
+    $('btn-check-update').textContent = '检查更新';
+    renderUpdateBox();
+  }
+}
+
+/** 下载 + 装。分两步是给「下载失败但已下过」留余地：重试只补没做到的那步。 */
+async function runUpdate() {
+  if (updateState.busy) return;
+  // 第一次点：下载。下载好了再点才真的装（装要退出程序，必须让用户明确再点一次）
+  if (!updateState.downloaded) {
+    updateState.busy = 'downloading';
+    renderUpdateBox();
+    try {
+      const r = await api('/update/download', { method: 'POST', body: {} });
+      updateState.downloaded = { name: r.name, sizeText: r.sizeText, version: r.version };
+      if (updateState.info) updateState.info.canInstall = r.canInstall !== false;
+      toast(r.reused ? '安装包已经下好了' : `下载完成（${r.sizeText}）`, 4000);
+    } catch (e) {
+      toast('下载失败：' + e.message, 7000);
+    } finally {
+      updateState.busy = '';
+      renderUpdateBox();
+    }
+    return;
+  }
+
+  // 第二次点：装。服务会先回一句「正在退出」，然后自己退出、脚本接手。
+  updateState.busy = 'installing';
+  renderUpdateBox();
+  try {
+    await api('/update/install', { method: 'POST', body: {} });
+    // 到这里服务已经在退出路上了，界面大概率马上就断 —— 不用再做什么
+  } catch (e) {
+    updateState.busy = '';
+    renderUpdateBox();
+    toast('安装失败：' + e.message, 8000);
+  }
+}
+
+/** 「跳过这个版本」：之后同一版号不再提示，出了更新的一版照常提示。 */
+async function ignoreUpdate() {
+  const v = updateState.info?.latest;
+  if (!v) return;
+  try {
+    await api('/update/ignore', { method: 'POST', body: { version: v } });
+    updateState.info = { ...updateState.info, hasUpdate: false };
+    renderUpdateBox();
+    toast(`不再提示 ${v}`);
+  } catch (e) {
+    toast('没保存成功：' + e.message);
+  }
+}
+
 /** 协议版本 + 同意状态 + 两个入口按钮的状态，都在这一处维护 */
 function renderAbout() {
   const a = state.agreement;
   $('about-version').textContent = state.appVersion ? `版本 ${state.appVersion}` : '版本 —';
+  renderUpdateBox();
   if (!a) {
     $('about-agree').textContent = '';
     return;
@@ -3360,6 +3515,16 @@ function bind() {
   // 协议：设置里「用户协议 / 隐私政策」两个链接 + 弹窗里的标签页
   $('btn-show-license').onclick = () => showAgreement('read', 'license');
   $('btn-show-privacy').onclick = () => showAgreement('read', 'privacy');
+
+  // 自动更新：手动检查 / 下载并安装 / 跳过这一版 / 打开下载页
+  $('btn-check-update').onclick = () => checkUpdate({ force: true });
+  $('btn-update-install').onclick = runUpdate;
+  $('btn-update-ignore').onclick = ignoreUpdate;
+  $('btn-update-page').onclick = () => {
+    const u = updateState.info?.pageUrl;
+    // 下载页可能为空（自定义清单没写），那时候就别开一个空白标签页
+    if (u) window.open(u, '_blank', 'noopener');
+  };
   $('tab-license').onclick = () => switchAgreementTab('license');
   $('tab-privacy').onclick = () => switchAgreementTab('privacy');
   $('btn-agree-ok').onclick = acceptAgreement;

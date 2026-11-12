@@ -475,9 +475,25 @@
         <h4>⑤ 关于与协议</h4>
         <div class="about-row">
           <span class="hint" id="about-version">版本 —</span>
+          <button type="button" class="linklike" id="btn-check-update">检查更新</button>
           <button type="button" class="linklike" id="btn-show-license">用户协议</button>
           <button type="button" class="linklike" id="btn-show-privacy">隐私政策</button>
           <span class="hint" id="about-agree"></span>
+        </div>
+        <!-- 更新区默认整块隐藏：没查到新版时不占地方。
+             查到了才展开「新版号 + 更新说明 + 下载安装」。 -->
+        <div class="update-box" id="update-box" hidden>
+          <div class="update-head">
+            <b id="update-title"></b>
+            <span class="hint" id="update-sub"></span>
+          </div>
+          <div class="update-notes" id="update-notes"></div>
+          <div class="update-actions">
+            <button type="button" class="btn primary tiny" id="btn-update-install">下载并安装</button>
+            <button type="button" class="btn ghost tiny" id="btn-update-ignore">跳过这个版本</button>
+            <button type="button" class="btn ghost tiny" id="btn-update-page" hidden>打开下载页</button>
+            <span class="hint" id="update-status"></span>
+          </div>
         </div>
       </section>
 

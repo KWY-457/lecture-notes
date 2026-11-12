@@ -1047,6 +1047,39 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 
 /* ---------- 用户协议 / 隐私政策 ---------- */
 .about-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+/* ---------- 自动更新 ---------- */
+/* 只有查到新版才展开。它就是「关于」这一节的一部分，不另做一个弹窗。 */
+.update-box {
+  margin-top: 10px; padding: 11px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+.update-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.update-head b { font-size: 13.5px; }
+/* 更新说明是 Markdown 源文，经过 renderMarkdown() 变成正常排版：
+   标题/列表都有现成的 .markdown 规则，这里只负责「一小块可滚动的区域」。
+   不用等宽字体了 —— 上一条把它当纯文本显示时露出的 `##` 才是真问题。 */
+.update-notes {
+  margin: 8px 0; max-height: 168px; overflow: auto;
+  font-size: 12.5px; line-height: 1.7;
+  overflow-wrap: anywhere; color: var(--muted-2);
+}
+.update-notes:empty { display: none; }
+/* 折叠区里的标题不能按正文那套 28px 上边距来，不然一大片空白 */
+.update-notes h1, .update-notes h2, .update-notes h3, .update-notes h4 {
+  font-size: 13px; margin: 10px 0 4px; padding: 0; border: 0; color: var(--text-2);
+}
+.update-notes h1:first-child, .update-notes h2:first-child,
+.update-notes h3:first-child, .update-notes h4:first-child { margin-top: 0; }
+.update-notes p { margin: 5px 0; }
+.update-notes ul, .update-notes ol { margin: 5px 0; padding-left: 20px; }
+.update-notes li { margin: 2px 0; }
+.update-notes code { font-family: var(--mono); font-size: .92em; }
+.update-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 下载中按钮上要显示「正在下载 12%」：给个最小宽度，按钮不会随百分比左右抖。 */
+#btn-update-install { min-width: 116px; }
+
 /* 协议正文是纯文本（.txt 原样放进来）：等宽字体 + 保留换行与全角空格，
    分段才会跟安装目录里看到的一模一样，不会因为 HTML 折叠空格而变形。 */
 .agree-tabs { margin-bottom: 10px; }

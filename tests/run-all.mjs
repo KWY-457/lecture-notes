@@ -59,6 +59,8 @@ const OFFLINE = [
   ['test-tex.mjs', 'LaTeX 公式渲染：分数/上下标/希腊字母/极端输入不崩'],
   ['test-tex-style.mjs', 'LaTeX 对齐：分数贴数学轴、根号不沉底、括号跟着长高'],
   ['test-tx-collapse.mjs', '逐字稿面板收起/展开：必须留回程入口、收起后正文真占满'],
+  // 不带地址时只跑 34 条纯逻辑；带了地址会多跑 4 条接口防呆（在第二层再跑一次）
+  ['test-update.mjs', '自动更新：版本比较、挑安装包、更新源与镜像、6 小时节流'],
   ['test-pdf-export.mjs', 'PDF 导出：只导正文、公式不裸奔、字体真的嵌进去（没装浏览器会跳过出 PDF 那几步）'],
   ['test-providers.mjs', '各家转写/大模型服务商的参数拼装'],
   ['test-worker-device-fallback.mjs', '显卡不可用时的回退'],
@@ -87,6 +89,8 @@ const SERVER = [
   ['test-storage.mjs', '存储位置：拒绝坏路径、迁移只复制不删源、改回默认、局域网 403'],
   ['test-lan.mjs', '手机访问开关：默认关、关着时局域网 403、开了放行、外机关不了'],
   ['test-provider-migration.mjs', '老配置迁移：收掉的服务商并进 custom / local，Key 和自填项不动'],
+  // 同一个脚本，给了地址就多跑 4 条接口防呆（外层 34 条纯逻辑在路上已经跑过一遍）
+  ['test-update.mjs', '自动更新的四个接口：只认 loopback、下载不接外部地址、能忽略某版'],
   ['test-integrations.mjs', '对外集成'],
 ];
 

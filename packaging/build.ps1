@@ -68,6 +68,8 @@ $null = New-Item -ItemType Directory -Force -Path $Stage
 $Files = @(
     @{ From = 'server.mjs';            To = 'server.mjs' },
     @{ From = 'docx.mjs';              To = 'docx.mjs' },
+    @{ From = 'pdf.mjs';               To = 'pdf.mjs' },
+    @{ From = 'update.mjs';            To = 'update.mjs' },
     @{ From = 'start.cmd';             To = 'start.cmd' },
     @{ From = 'README.md';             To = 'README.md' },
     @{ From = 'LICENSE.txt';           To = 'LICENSE.txt' },
@@ -165,7 +167,11 @@ Step '2/4 生成启动器（UTF-16LE）'
 # UTF-16LE + BOM，否则双击会报「无效字符」。这个转换每次打包都要重做。
 $VbsPairs = @(
     @{ From = 'helpers\launcher-src.vbs';  To = '启动.vbs' },
-    @{ From = 'helpers\stop-src.vbs';      To = '停止.vbs' }
+    @{ From = 'helpers\stop-src.vbs';      To = '停止.vbs' },
+    # 自动更新的收尾脚本：服务退出后由它把安装包拉起来。
+    # 单独一个文件而不是塞进停止器：停止器用户会双击「停止 讲义笔记」手动用，
+    # 两件事混在一个脚本里，迟早有人手滑点到安装。
+    @{ From = 'helpers\update-src.vbs';    To = '更新.vbs' }
 )
 foreach ($v in $VbsPairs) {
     $src = Join-Path $Root $v.From
@@ -184,11 +190,12 @@ Step '3/4 自检'
 
 # 3.1 必需文件齐全（和 .iss 里的 [Files] 一一对应）
 $Required = @(
-    'server.mjs', 'docx.mjs', 'start.cmd', 'runtime\node.exe',
-    '启动.vbs', '停止.vbs', 'README.md', 'LICENSE.txt', 'PRIVACY.txt',
+    'server.mjs', 'docx.mjs', 'pdf.mjs', 'update.mjs', 'start.cmd', 'runtime\node.exe',
+    '启动.vbs', '停止.vbs', '更新.vbs', 'README.md', 'LICENSE.txt', 'PRIVACY.txt',
     'public\index.html', 'public\app.js', 'public\app.css',
     'public\transcript.js', 'public\note.js', 'public\summarize.js',
-    'helpers\launcher-src.vbs', 'helpers\stop-src.vbs', 'helpers\lecture-notes.ico',
+    'helpers\launcher-src.vbs', 'helpers\stop-src.vbs', 'helpers\update-src.vbs',
+    'helpers\lecture-notes.ico',
     'docs\API接入教程.md'
 )
 $missing = @()

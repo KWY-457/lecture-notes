@@ -1,4 +1,4 @@
-﻿; ===========================================================================
+; ===========================================================================
 ;  讲义笔记 LectureNotes —— Inno Setup 安装脚本
 ;
 ;  用法（先装 Inno Setup 6：winget install JRSoftware.InnoSetup）：
@@ -30,10 +30,23 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={autopf}\{#AppNameEn}
+; 2026-11-12 改：装到用户目录，不再默认 Program Files。
+;
+; 为什么改：自动更新要往程序目录里写文件。装到 Program Files 时那是只读的，
+; 每次更新都要弹一次 UAC 等用户点「是」—— 用户走开了更新就卡在那儿。
+; 装到 {localappdata}\Programs 下则完全属于当前用户，更新全程免提权。
+; 这也是 VS Code 用户版、Discord、Chrome 的做法。
+;
+; 升级兼容：AppId 没变（上面那行），老用户点新版安装包会原地覆盖升级到
+; 这个新位置 —— 但**旧位置的文件不会被自动删掉**（Inno 只会往新目录装），
+; 所以老版本用户升级后 Program Files 里会留一份没用的旧文件，
+; 需要他们手动卸载一次。发售前改这一条，受影响的人只有我们自己。
+DefaultDirName={localappdata}\Programs\{#AppNameEn}
 DefaultGroupName={#AppName}
-; 允许普通用户装到自己的目录（不强制管理员），但默认还是 Program Files
-PrivilegesRequiredOverridesAllowed=dialog
+; lowest = 从不请求管理员权限。配套 DefaultDirName 一起改的，别单独动其中一个：
+; 只改目录不改权限，安装时会因为写不进 {localappdata} 而失败；
+; 只改权限不改目录，会装到 Program Files 却拿不到写权限，运行就崩。
+PrivilegesRequired=lowest
 OutputDir=output
 ; 输出文件名只能用 ASCII：Inno Setup 6.0/6.1 会拒绝非 ASCII 的 OutputBaseFileName
 ; （6.2 起才放开）。所以这里出英文名，build.ps1 打完再改成中文名给用户看。
@@ -66,14 +79,17 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 ; ---- 程序本体（由 build.ps1 拷进 stage\） ----
 Source: "stage\server.mjs";            DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\docx.mjs";              DestDir: "{app}"; Flags: ignoreversion
+Source: "stage\pdf.mjs";               DestDir: "{app}"; Flags: ignoreversion
+Source: "stage\update.mjs";            DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\start.cmd";             DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\public\*";              DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "stage\helpers\*";             DestDir: "{app}\helpers"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 自带的 Node 运行时（买家机器上没有 Node.js，必须带）
 Source: "stage\runtime\node.exe";      DestDir: "{app}\runtime"; Flags: ignoreversion
-; 启动器 / 停止器（build.ps1 从 helpers\*-src.vbs 转成 UTF-16LE 再拷进来）
+; 启动器 / 停止器 / 更新收尾（build.ps1 从 helpers\*-src.vbs 转成 UTF-16LE 再拷进来）
 Source: "stage\启动.vbs";              DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\停止.vbs";              DestDir: "{app}"; Flags: ignoreversion
+Source: "stage\更新.vbs";              DestDir: "{app}"; Flags: ignoreversion
 ; 说明文档
 Source: "stage\README.md";             DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "stage\docs\API接入教程.md";    DestDir: "{app}\docs"; Flags: ignoreversion
@@ -106,6 +122,33 @@ Type: files; Name: "{app}\data\runtime.json"
 Type: dirifempty; Name: "{app}\data"
 
 [Code]
+{ 安装/升级前先把正在跑的服务停掉。
+
+  为什么必须有这一步：runtime\node.exe 在服务跑着的时候被 Windows 锁住，
+  删不掉也不能覆盖。以前只有 [UninstallRun] 在**卸载**前停服务，安装/升级前
+  没有 —— 于是「装新版本」会卡在写 runtime\node.exe 失败，或者更糟：
+  文件写到一半、旧进程还占着句柄，装完打不开。
+
+  调用的是程序目录里现成的「停止.vbs」（它会 POST /api/shutdown 再收尾
+  llama-server）。老版本没装过、或者用户手工删了它，也不该死在这里 ——
+  Exec 失败就当没这回事，继续安装。 }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  StopScript: String;
+  ResultCode: Integer;
+begin
+  Result := '';
+  StopScript := ExpandConstant('{app}\停止.vbs');
+  if FileExists(StopScript) then
+  begin
+    { 8 秒足够：服务收到 shutdown 后 400ms 就退，剩下的是写盘 }
+    if not Exec('wscript.exe', '"' + StopScript + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      Log('停止服务失败（继续安装）：' + SysErrorMessage(ResultCode))
+    else
+      Log('已请求停止旧服务，返回码 ' + IntToStr(ResultCode));
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   DataDir: String;

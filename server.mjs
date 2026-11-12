@@ -43,6 +43,11 @@ import { cleanSegments } from './public/cleanup.js';
 // 过时的离线笔记服务端会自己重建 —— 笔记本来就是逐字稿的确定性函数。
 import { noteStatus, stampNote, normalizeNote, transcriptFingerprint } from './public/note.js';
 import { analyze } from './public/summarize.js';
+// 自动更新：版本比较 / 清单解析 / 下载源排序只写一份，前端与测试共用同一套判断。
+// 这里面一个网络请求、一次文件操作都没有 —— 纯函数才好测。
+import {
+  compareVersion, feedUrls, mirrorUrls, parseFeed, shouldCheck, shouldOffer, formatBytes, versionFromFileName,
+} from './update.mjs';
 const execFileAsync = promisify(execFile);
 
 /** 读真实显存占用：本地大模型和 WebGPU 转写会抢显存，前端需要据此预警 */
@@ -391,6 +396,32 @@ const DEFAULT_CONFIG = {
    */
   onboard: {
     done: false,
+  },
+  /**
+   * 自动更新。
+   *
+   * 老大问「所以学习他可以做到自动更新吗」，答「能」之后定下的两条：
+   * 装到用户目录（免 UAC，更新包才写得进去）、文件放 GitHub Releases。
+   *
+   * 字段都只记「用户的选择」和「多久查一次」：
+   *   enabled        —— 用户可以在设置里关掉。关掉就是一次网络都不发。
+   *   lastCheckAt    —— 上次真正发出检查请求的时间，用来节流（不是每次开界面都打）。
+   *   lastVersion    —— 上次检查看到的最新版本，界面不用重新请求就能显示。
+   *   ignoredVersion —— 用户点了「跳过这个版本」，之后这个名字不再提示。
+   *
+   * repo / feedUrl 是「更新源」，默认指向发布仓库。为什么允许改：
+   *   ① 作者自己换仓库时不用重新发版；
+   *   ② 别人 fork 后想用同一套更新机制，改一行配置就行；
+   *   ③ 内网/镜像部署时可以直接指向一份静态 latest.json。
+   * 两者只用一个：feedUrl 有值就完全以它为准。
+   */
+  update: {
+    enabled: true,
+    repo: 'lecture-notes/lecture-notes',
+    feedUrl: '',
+    lastCheckAt: '',
+    lastVersion: '',
+    ignoredVersion: '',
   },
 };
 
@@ -1614,6 +1645,289 @@ async function handleHfProxy(req, res, u) {
   }
 }
 
+/* ------------------------------- 自动更新 -------------------------------- */
+/**
+ * 这一节只做三件事：查、下、装。
+ *
+ * 三层顺序不能换：
+ *   ① `GET /api/update/check`  —— 拉清单，算出「有没有新版」。一次网络请求，几 KB。
+ *   ② `POST /api/update/download` —— 把安装包下到数据目录的 `update\` 里。
+ *      先写 `.part`，完整了再 `rename` —— 断网/关窗口留下的半截文件永远不会被当成安装包。
+ *   ③ `POST /api/update/install` —— 起一个小 VBS，然后服务自己退出。
+ *      VBS 等进程真死（不是 sleep 几秒），才把安装包拉起来。
+ *
+ * 为什么不自己直接 spawn 安装包：node.exe 还开着的时候安装程序写不进去
+ * （实测：运行中的 exe 删不掉、也不能被覆盖）。先退再装是唯一顺序。
+ */
+
+/** 安装包落在哪儿：数据目录下的 update\，卸载不删（那目录本来就不清理）。 */
+function updateDir() {
+  return path.join(DATA_DIR, 'update');
+}
+
+/** 下到一半的临时名。刻意不用 `.exe` 结尾 —— 双击不会误执行半截文件。 */
+function partPathFor(file) {
+  return path.join(updateDir(), file + '.part');
+}
+
+/**
+ * 现在正在跑的这一份是「安装版的」还是「绿色版/开发版的」。
+ *
+ * 判据是「程序目录旁边有没有 data 目录」——和 pickDataDir() 同一套逻辑：
+ * 安装版的数据在 %LOCALAPPDATA%，程序目录里没有 data；
+ * 绿色版/开发版的数据就在程序旁边。
+ *
+ * 为什么非要分：绿色版根本没有「安装包」这个位置，自动更新装到哪里去？
+ * 那种情况只提示「有新版本，去下载」，不提供一键装。
+ */
+function isInstalledBuild() {
+  return !DATA_DIR_PORTABLE;
+}
+
+/** 一个安全的文件名（清单是外部数据，不能直接拼进路径）。 */
+function safeFileName(name, fallback = 'LectureNotes-setup.exe') {
+  const base = path.basename(String(name || '').replace(/\\/g, '/')).replace(/[<>:"|?*\u0000-\u001f]/g, '');
+  const trimmed = base.trim();
+  if (!trimmed || trimmed === '.' || trimmed === '..') return fallback;
+  return trimmed.toLowerCase().endsWith('.exe') ? trimmed : fallback;
+}
+
+/** 带超时的 fetch。服务器上所有对外请求都该有上限，否则一个卡住的源会拖死整个界面。 */
+async function fetchWithTimeout(url, { timeoutMs = 8000, headers = {}, method = 'GET' } = {}) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      method,
+      signal: ac.signal,
+      redirect: 'follow',
+      headers: { 'user-agent': `LectureNotes/${VERSION}`, ...headers },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * 拉清单。多源按顺序试，第一个成功的就用。
+ *
+ * 失败不抛异常而是回 { error }——检查更新失败是常态（没网、被墙、镜像挂了），
+ * 界面要能安稳地说一句「检查不了」，而不是弹一个红框。
+ */
+async function fetchFeed(cfg) {
+  const urls = feedUrls({ repo: cfg.repo, feedUrl: cfg.feedUrl });
+  if (!urls.length) return { error: '还没有配置更新源' };
+  const tried = [];
+  for (const url of urls) {
+    try {
+      const resp = await fetchWithTimeout(url, { timeoutMs: 8000, headers: { accept: 'application/json' } });
+      if (!resp.ok) {
+        tried.push(`${new URL(url).host} 返回 ${resp.status}`);
+        continue;
+      }
+      const text = await resp.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        tried.push(`${new URL(url).host} 返回的不是 JSON`);
+        continue;
+      }
+      const feed = parseFeed(json, { repo: cfg.repo });
+      if (!feed) {
+        tried.push(`${new URL(url).host} 的清单里没有安装包`);
+        continue;
+      }
+      return { feed, url };
+    } catch (e) {
+      const host = (() => {
+        try {
+          return new URL(url).host;
+        } catch {
+          return url;
+        }
+      })();
+      tried.push(`${host}：${e.name === 'AbortError' ? '超时' : e.message}`);
+    }
+  }
+  return { error: tried.join('；') || '连接不上更新源' };
+}
+
+/**
+ * 检查 + 落盘「上次查过什么」。
+ * 为什么把结果写进 config：界面每次打开设置都要显示「当前最新版」，不该为了
+ * 一个字符串再打一次网络。
+ */
+async function checkUpdate({ force = false } = {}) {
+  const cfg = config.update || DEFAULT_CONFIG.update;
+  if (!cfg.enabled) return { enabled: false, reason: '用户关掉了自动更新' };
+  if (!force && !shouldCheck(cfg.lastCheckAt)) {
+    return {
+      enabled: true,
+      cached: true,
+      current: VERSION,
+      latest: cfg.lastVersion || '',
+      hasUpdate: shouldOffer(cfg.lastVersion, VERSION, cfg.ignoredVersion),
+      // 「这一版是不是用户自己点过跳过」也要回：界面靠它决定要不要显示「取消跳过」
+      ignored: !!cfg.ignoredVersion && compareVersion(cfg.lastVersion, cfg.ignoredVersion) === 0,
+      // 走缓存也必须回答「能不能一键装」—— 前端拿它决定显示哪几个按钮，
+      // 缺了这个字段就会被当成「能装」，绿色版用户会看到一个点了会报错的按钮。
+      canInstall: isInstalledBuild(),
+      checkedAt: cfg.lastCheckAt || '',
+    };
+  }
+  const { feed, url, error } = await fetchFeed(cfg);
+  if (error) {
+    // 查失败也要记时间，否则界面每刷新一次都会重撞一遍同一个死源
+    await saveConfig({ update: { lastCheckAt: new Date().toISOString() } }).catch(() => {});
+    return { enabled: true, current: VERSION, error };
+  }
+  await saveConfig({
+    update: { lastCheckAt: new Date().toISOString(), lastVersion: feed.version },
+  }).catch(() => {});
+  const latestCfg = config.update || {};
+  return {
+    enabled: true,
+    current: VERSION,
+    latest: feed.version,
+    hasUpdate: shouldOffer(feed.version, VERSION, latestCfg.ignoredVersion),
+    ignored: !!latestCfg.ignoredVersion && compareVersion(feed.version, latestCfg.ignoredVersion) === 0,
+    notes: feed.notes,
+    publishedAt: feed.publishedAt,
+    pageUrl: feed.pageUrl,
+    installer: {
+      name: feed.installer.name,
+      size: feed.installer.size,
+      sizeText: formatBytes(feed.installer.size),
+      sha256: feed.installer.sha256,
+    },
+    // 「能不能一键装」和「有没有新版」是两件事：绿色版有新版但装不了
+    canInstall: isInstalledBuild(),
+    source: url,
+    checkedAt: config.update?.lastCheckAt || '',
+  };
+}
+
+/** 已经下好的安装包（校验过大小才算数）。没有返回 null。 */
+async function findDownloadedInstaller() {
+  const dir = updateDir();
+  let names = [];
+  try {
+    names = await fsp.readdir(dir);
+  } catch {
+    return null;
+  }
+  const exe = names.filter((n) => /\.exe$/i.test(n));
+  if (!exe.length) return null;
+  let best = null;
+  for (const n of exe) {
+    const full = path.join(dir, n);
+    const st = await fsp.stat(full).catch(() => null);
+    if (!st || !st.size) continue;
+    if (!best || st.size > best.size) best = { file: n, path: full, size: st.size, mtime: st.mtimeMs };
+  }
+  return best;
+}
+
+/**
+ * 下载安装包。
+ *
+ * 关键几点（都是踩过的坑）：
+ *   · 先写 `.part`，`Content-Length` 对得上才 `rename` —— 否则断电留下的半截 exe
+ *     会被下次启动当成「已下好」，一装就报「文件损坏」；
+ *   · 每个源都试，成功立刻停 —— 首源超时 15 秒不能白等，PCL 的做法就是
+ *     15 秒超时后立刻换下一个；
+ *   · 已经下过同一份（大小一致）就直接复用，不重复下 25MB。
+ */
+async function downloadInstaller(feed) {
+  const dir = updateDir();
+  await fsp.mkdir(dir, { recursive: true });
+  const name = safeFileName(feed.installer.name);
+  const finalPath = path.join(dir, name);
+  const wantSize = Number(feed.installer.size) || 0;
+
+  const existing = await fsp.stat(finalPath).catch(() => null);
+  if (existing && existing.size && (!wantSize || existing.size === wantSize)) {
+    return { ok: true, path: finalPath, name, size: existing.size, reused: true };
+  }
+
+  const urls = mirrorUrls(feed.installer.url);
+  const tried = [];
+  for (const url of urls) {
+    const part = partPathFor(name);
+    let handle = null;
+    try {
+      const resp = await fetchWithTimeout(url, { timeoutMs: 15000 });
+      if (!resp.ok) {
+        tried.push(`${new URL(url).host} 返回 ${resp.status}`);
+        continue;
+      }
+      const total = Number(resp.headers.get('content-length')) || 0;
+      handle = await fsp.open(part, 'w');
+      let written = 0;
+      for await (const chunk of resp.body) {
+        await handle.write(chunk);
+        written += chunk.length;
+      }
+      await handle.close();
+      handle = null;
+      if (wantSize && written !== wantSize) {
+        tried.push(`${new URL(url).host} 大小对不上（${formatBytes(written)} / 应为 ${formatBytes(wantSize)}）`);
+        await fsp.rm(part, { force: true }).catch(() => {});
+        continue;
+      }
+      if (total && written !== total) {
+        tried.push(`${new URL(url).host} 没下完（${formatBytes(written)} / ${formatBytes(total)}）`);
+        await fsp.rm(part, { force: true }).catch(() => {});
+        continue;
+      }
+      await fsp.rename(part, finalPath);
+      return { ok: true, path: finalPath, name, size: written, reused: false };
+    } catch (e) {
+      if (handle) await handle.close().catch(() => {});
+      await fsp.rm(partPathFor(name), { force: true }).catch(() => {});
+      const host = (() => {
+        try {
+          return new URL(url).host;
+        } catch {
+          return url;
+        }
+      })();
+      tried.push(`${host}：${e.name === 'AbortError' ? '超时' : e.message}`);
+    }
+  }
+  return { ok: false, error: tried.join('；') || '没有可用的下载地址' };
+}
+
+/**
+ * 把「装」这件事交给一个独立进程，然后自己退出。
+ *
+ * 为什么用 VBS 而不是 powershell：VBS 由 wscript 拉起，不需要控制台窗口，
+ * 也不会因为 PowerShell 执行策略被拦（那是买家机器上最常见的失败原因之一）。
+ * 脚本内容是 helpers/update-src.vbs（打包时转成 UTF-16LE 放到程序目录）。
+ *
+ * 注意顺序：先起脚本、再回响应、最后退出。脚本自己会等 pid 死掉，
+ * 所以这里 `setTimeout` 里的退出是「走个形式让 HTTP 响应发出去」。
+ */
+async function applyUpdate(installerPath) {
+  const scriptPath = path.join(__dirname, '更新.vbs');
+  // 开发环境（没跑过打包）没有这个文件 —— 那就直接给路径，让用户自己双击。
+  if (!fs.existsSync(scriptPath)) {
+    return { ok: false, error: '这个版本里没有更新脚本，请手动运行下载好的安装包', manual: installerPath };
+  }
+  const child = spawn('wscript.exe', [scriptPath, String(process.pid), installerPath], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  child.on('error', (e) => console.warn('[自动更新] 拉起更新脚本失败：', e.message));
+  child.unref();
+  console.log(`[自动更新] 已交接给更新脚本（pid ${process.pid}），安装包：${installerPath}`);
+  // 400ms 给 HTTP 响应留出写回浏览器的时间；脚本那边只认「pid 真的没了」
+  setTimeout(() => process.exit(0), 600);
+  return { ok: true, restarting: true };
+}
+
 /* --------------------------------- 路由 ---------------------------------- */
 async function handleApi(req, res, u) {
   const p = u.pathname.replace(/^\/api/, '') || '/';
@@ -2555,6 +2869,70 @@ async function handleApi(req, res, u) {
       });
       return res.end(buf);
     }
+  }
+
+  /* ------ 自动更新 ------ */
+  // 三个接口都只给本机。
+  // 为什么：更新会替换程序文件、还会让服务退出 —— 这两件事都不该让
+  // 局域网里拿着入口地址的人做（那等于给了对方一个「远程把软件弄坏」的按钮）。
+  if (p === '/update/check') {
+    if (req.method !== 'GET' && req.method !== 'POST') return fail(res, 405, '方法不支持');
+    if (!isLoopback(req)) return fail(res, 403, '只允许在本机检查更新');
+    const body = req.method === 'POST' ? await readJsonBody(req).catch(() => ({})) : {};
+    const force = body?.force === true || u.searchParams.get('force') === '1';
+    try {
+      return json(res, 200, { ok: true, ...(await checkUpdate({ force })) });
+    } catch (e) {
+      return json(res, 200, { ok: true, enabled: true, current: VERSION, error: e.message });
+    }
+  }
+
+  if (p === '/update/download') {
+    if (req.method !== 'POST') return fail(res, 405, '方法不支持');
+    if (!isLoopback(req)) return fail(res, 403, '只允许在本机下载更新');
+    const cfg = config.update || DEFAULT_CONFIG.update;
+    if (!cfg.enabled) return fail(res, 400, '自动更新已关闭');
+    // 现拉一次清单，不信任前端传来的地址 —— 否则这个接口就成了
+    // 「让本机下载任意 URL 并执行」的入口。
+    const { feed, error } = await fetchFeed(cfg);
+    if (error) return fail(res, 502, `下载不了：${error}`);
+    const got = await downloadInstaller(feed);
+    if (!got.ok) return fail(res, 502, `下载失败：${got.error}`);
+    return json(res, 200, {
+      ok: true,
+      name: got.name,
+      size: got.size,
+      sizeText: formatBytes(got.size),
+      reused: got.reused,
+      version: feed.version,
+      canInstall: isInstalledBuild(),
+    });
+  }
+
+  if (p === '/update/install') {
+    if (req.method !== 'POST') return fail(res, 405, '方法不支持');
+    if (!isLoopback(req)) return fail(res, 403, '只允许在本机安装更新');
+    if (!isInstalledBuild()) {
+      return fail(res, 400, '这一份是绿色版（数据在程序目录里），不能自动安装。请到下载页手动换新版本。');
+    }
+    const got = await findDownloadedInstaller();
+    if (!got) return fail(res, 400, '还没下载好安装包');
+    const r = await applyUpdate(got.path);
+    if (!r.ok) return fail(res, 400, r.error, { manual: r.manual });
+    return json(res, 200, { ok: true, message: '正在退出并安装，装完会自动打开' });
+  }
+
+  if (p === '/update/ignore') {
+    if (req.method !== 'POST') return fail(res, 405, '方法不支持');
+    if (!isLoopback(req)) return fail(res, 403, '只允许在本机设置');
+    const body = await readJsonBody(req);
+    const version = String(body.version || '').trim();
+    try {
+      await saveConfig({ update: { ignoredVersion: version } });
+    } catch (e) {
+      return fail(res, 500, `没保存成功：${e.code || e.message}`);
+    }
+    return json(res, 200, { ok: true, ignoredVersion: config.update.ignoredVersion });
   }
 
   if (p === '/shutdown' && req.method === 'POST') {

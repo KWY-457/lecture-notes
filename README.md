@@ -318,9 +318,26 @@ C:\Program Files\LectureNotes\            ← 程序（升级时整个换掉）
 
 `server.mjs` 顶部 `const VERSION = 'x.y.z';` 与 `packaging/lecture-notes.iss` 的 `#define AppVersion "x.y.z"` 必须一致，`packaging/build.ps1` 每次打包都会核对，不一致直接拒绝出包。发新版只改这两处。
 
+### 自动更新怎么用
+
+设置面板 →「⑤ 关于与协议」→「检查更新」。查到新版会在这里挂一行，带版本号、发布时间、安装包体积和更新说明。
+
+三步是分开的，故意不合并：
+
+1. **检查**：只拉清单（几 KB）。打开设置时顺手查一次，服务端 6 小时节流，同一次会话里基本不再发请求。
+2. **下载并安装**：点第一下只是下载到 `data\update\`。先写 `.part`，长度对上了才改名，半截文件不会被当成安装包。
+3. **立即安装**：点第二下才真装 —— 因为要先退出程序。
+
+**为什么要先退出**：实测 Windows 上跑着的 `runtime\node.exe` 删不掉、也不能被覆盖（但能改名）。所以顺序只能是「退出 → 装」，`update.mjs` 起一个 `更新.vbs` 等进程真死（WMI 轮询 `Win32_Process`，不是 sleep 猜），再拉起安装包。装的过程中界面会断，这是正常的。
+
+**绿色版不支持一键装**：判据是 `DATA_DIR_PORTABLE`（程序旁边有没有 `data\` 目录）。绿色版没有「安装位置」可覆盖，界面只会给一个下载页链接。
+
+**更新源**：`config.json` 的 `update.repo`（GitHub `owner/repo`）或 `update.feedUrl`（自己托管一份 `latest.json`）。两个都填就只用 `feedUrl`。国内连不上 `api.github.com` 时自动改用 `gh-proxy.com` 镜像；安装包如果是 github.com 的地址，同样会补一个镜像地址重试。
+
+**跳过这个版本**：`update.ignoredVersion` 记住你不想要的那个版号，出了更新的一版照常提示。
+
 ### 现在还没有的部分（如实说明）
 
-- **没有自动更新**：程序不会自己去网上查有没有新版，用户得自己下载。要做到「点一下自动升级」得先有个放安装包的地址（自己的网站或 GitHub Releases），再在程序里加一个「检查更新」按钮 + 下载 + `静默安装`。工作量不大，但需要一个发布的服务器。
 - **没有错误上报**：崩溃了作者收不到任何信息，只能靠用户反馈。
 - **升级不改数据格式**：如果以后改了 `transcript.json` / `note.json` 的字段，老数据靠 `data/lectures/*/transcript.json` 里的 `schemaVersion` 和 `note.json` 里的 `noteVersion` 自动识别并就地升级（这一层已经在 `public/transcript.js` 和 `public/note.js` 里，读写都会过一遍）。**意思是：以后加新功能改格式，老用户打开就自动修好，不用手动迁移。**
 
