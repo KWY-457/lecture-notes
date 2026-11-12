@@ -771,29 +771,52 @@ if (lecture) {
   provSel.value = 'siliconflow';
   fire(provSel, 'change');
 
-  /* --- 云端接入：教程弹窗 --- */
-  // 教程正文是 onclick 里异步 fetch 来的，onclick 本身不返回 Promise。
-  // 所以不能「await onclick 再固定 sleep 700ms」——网慢一点就红。
-  // 用带截止时间的轮询：等到有正文为止。
-  const waitBody = async (ms = 8000) => {
-    const t0 = Date.now();
-    const box = doc.getElementById('api-body');
-    while (Date.now() - t0 < ms) {
-      if (box.innerHTML.length > 300) return box.innerHTML.length;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    return box.innerHTML.length;
-  };
-  await doc.getElementById('btn-help-api').onclick();
-  const asrLen = await waitBody();
-  check('服务商教程弹窗打开', doc.getElementById('api-modal').hidden === false, '');
-  check('服务商教程有正文', asrLen > 300, String(asrLen));
-  doc.getElementById('btn-api-close').onclick();
-  check('教程弹窗可关闭', doc.getElementById('api-modal').hidden === true, '');
-  await doc.getElementById('btn-help-api-llm').onclick();
-  const llmLen = await waitBody();
-  check('笔记教程弹窗打开并分段显示', doc.getElementById('api-modal').hidden === false && llmLen > 300, String(llmLen));
-  doc.getElementById('btn-api-close').onclick();
+  /* --- 常见问题弹窗（原来的「使用说明」和「云端 API 教程」并成了一个）--- */
+  const faqModal = doc.getElementById('help-modal');
+  const faqBody = doc.getElementById('faq-body');
+  const faqSearch = doc.getElementById('faq-search');
+  const faqItems = () => faqBody.querySelectorAll('.faq-item');
+  doc.getElementById('btn-help').onclick();
+  check('常见问题弹窗可打开', faqModal.hidden === false, '');
+  // 内容是多层 DOM（details/summary 折起来），不是一段 innerHTML，
+  // 所以按结构数：应该有 3 组、当前服务商那家默认展开、报错与用法一条不少。
+  check('常见问题分了三组', faqBody.querySelectorAll('.faq-group').length === 3, String(faqBody.querySelectorAll('.faq-group').length));
+  const tuts = faqBody.querySelectorAll('.faq-tut');
+  const openTut = tuts.filter((t) => t.open === true);
+  check(
+    '三家服务商的申请教程都在，只展开正在用的那一家',
+    tuts.length === 3 && openTut.length === 1,
+    `共 ${tuts.length} 家，展开 ${openTut.length} 家`
+  );
+  check(
+    '报错对照与用法条目都画出来了',
+    faqItems().length >= 25,
+    String(faqItems().length)
+  );
+
+  /* 搜索：报错原文是用户唯一能提供的东西，所以只要搜「401」就只剩那一条 */
+  faqSearch.value = '401';
+  fire(faqSearch, 'input');
+  check('搜报错原文能过滤到一条', faqItems().length === 1, String(faqItems().length));
+  check('过滤后不再显示服务商教程', faqBody.querySelectorAll('.faq-tut').length === 0, '');
+
+  faqSearch.value = '备份';
+  fire(faqSearch, 'input');
+  const bk = faqItems();
+  check('搜中文关键词能命中用法条目', bk.length === 1 && /备份/.test(bk[0].querySelector('summary').textContent), String(bk.length));
+
+  faqSearch.value = 'zzzz-没这个东西';
+  fire(faqSearch, 'input');
+  check('搜不到时给换说法的提示', !!faqBody.querySelector('.faq-empty'), '');
+
+  faqSearch.value = '';
+  fire(faqSearch, 'input');
+  check('清空搜索后恢复全部', faqItems().length >= 25, String(faqItems().length));
+
+  doc.getElementById('btn-help-close').onclick();
+  check('常见问题弹窗可关闭', faqModal.hidden === true, '');
+  check('再次打开时搜索框是空的', (doc.getElementById('btn-help').onclick(), faqSearch.value === ''), faqSearch.value);
+  doc.getElementById('btn-help-close').onclick();
 
   /* --- 云端接入：清掉已保存的 Key（confirm 允许之后应当真的发 PUT）--- */
   globalThis.confirm = () => true;

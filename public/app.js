@@ -9,7 +9,8 @@ import { cleanSegments } from './cleanup.js';
 import { outlineFromMarkdown as noteOutlineFromMarkdown } from './note.js';
 import { topicLeaves } from './mindmap.js';
 import { optionsFor, getProvider, modelsFor, defaultModel, estimateCost, PROVIDER_VERSION, sortedModels, TIERS, modelSpec } from './providers.js';
-import { createOnboard, shouldOnboard } from './onboard.js';
+import { createOnboard, shouldOnboard, TUTORIALS } from './onboard.js';
+import { filterFaq, sections as faqSections } from './faq.js';
 
 /* ============================ 全局状态 ============================ */
 const state = {
@@ -33,6 +34,9 @@ const state = {
   // /system 的一次快照：{lan, modelCache, storage:{lectures,models,dataDir}, ...}
   // 存储位置那一段（现在存哪、是不是默认、占多大）靠它渲染。
   sys: null,
+  // 常见问题里「手机传录音」那条要显示真实地址。这里只存一句话，
+  // 由 renderFaq() 打开弹窗时现拼（地址会随开关变，不能写死在 faq.js 里）。
+  lanNote: '',
   // 存储位置的状态缓存，moveStorage 里判断「是不是已经改回默认」要用。
   // 和 sys.storage 是同一份数据，单独留一个引用只为少写几层可选链。
   storage: null,
@@ -2266,67 +2270,165 @@ function renderModelPicker(kind) {
 }
 
 /**
- * 云端 API 接入教程弹窗。
+ * 「常见问题」弹窗。
  *
- * 教程正文放在 public/api-tutorial.md（跟着服务端一起发出去，不打包进 JS），
- * 这样改文案不用动代码。kind='asr' 时只显示「转写」那一段，kind='llm' 只显示
- * 「笔记」那一段 —— 一次只谈正在做的那一件事，别让用户在一屏十家里找自己那家。
+ * 内容在 public/faq.js（纯数据 + 纯函数，能单独跑测试），这里只负责画。
+ * 三组：API 怎么申请 / 报错对照 / 用法与设置。
+ *
+ * 为什么每一问都做成可折叠（<details>）而不是全部摊开：
+ *   报错对照有 19 条，全摊开要滚三屏，用户真正想看的是「我这一条」。
+ *   折叠之后标题就是屏幕上的报错原文，扫一眼就能认出来 —— 这比读解释快得多。
+ *
+ * 搜索只过滤问答本身，不过滤分组标题（搜「401」不该因为分组叫「报错对照」
+ * 就被整组留下）。API 那一组连服务商名和步骤一起搜，用户可能记得「硅基」
+ * 但记不住是第几步。
  */
-async function showApiTutorial(kind = 'llm') {
-  const box = $('api-body');
-  $('api-modal').hidden = false;
-  const title = kind === 'asr' ? '转写服务商怎么申请' : kind === 'llm' ? 'AI 笔记服务商怎么申请' : '服务商怎么申请（转写 + AI 笔记）';
-  box.innerHTML = `<p class="hint">正在读取教程…</p>`;
-  let md = '';
-  try {
-    const r = await fetch('./api-tutorial.md', { cache: 'no-store' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    md = await r.text();
-  } catch (e) {
-    box.innerHTML =
-      `<p class="hint">教程文件没读出来（${e.message}）。文件在 <code>lecture-notes/public/api-tutorial.md</code>，` +
-      `完整版在 <code>lecture-notes/docs/API接入教程.md</code>，直接用记事本也能看。</p>`;
-    return;
+function faqEmpty() {
+  const d = document.createElement('p');
+  d.className = 'hint faq-empty';
+  d.textContent = '没找到。换个说法试试，比如只搜报错里的一小段英文、或者「备份」「导出」。';
+  return d;
+}
+
+/** 一条问答：标题 = 问题（或报错原文），点开看答案
+ *  mono=true 时标题用等宽 —— 报错组那十九条都是「屏幕上那串字」，
+ *  整组一个字体才整齐；混着用（只有带英文的那几条等宽）看着像没设好。 */
+function faqItem(q, aMd, extra, mono) {
+  const box = document.createElement('details');
+  box.className = 'faq-item';
+  const sum = document.createElement('summary');
+  sum.textContent = q;
+  if (mono) sum.className = 'mono';
+  box.appendChild(sum);
+  const body = document.createElement('div');
+  body.className = 'faq-a';
+  body.innerHTML = renderMarkdown(aMd);
+  // 「手机传录音」那条要接一句这台机器的真实情况（地址 / 开关没开 / 只绑了本机）。
+  // 地址不能写死在 faq.js 里：它随开关和网络变，写死等于给错的东西。
+  if (extra) {
+    const line = document.createElement('p');
+    line.className = 'hint faq-lan';
+    line.textContent = extra;
+    body.appendChild(line);
   }
-  // kind='all'（合并下拉的教程按钮）：转写和笔记是同一家，全文都给，别挑段
-  const picked = kind === 'all' ? md : pickTutorialSection(md, kind);
-  box.innerHTML =
-    `<h4>${title}</h4>` +
-    renderMarkdown(picked) +
-    `<hr><p class="hint">教程跟着软件走，不会自己更新。价格和免费额度以服务商官网为准（本教程核对日期：${PROVIDER_VERSION}）。</p>`;
+  box.appendChild(body);
+  return box;
+}
+
+/** 一家服务商的申请教程（复用首次引导里的 TUTORIALS，一处维护两边一致） */
+function faqTutorial(id, t, open) {
+  const box = document.createElement('details');
+  box.className = 'faq-item faq-tut';
+  box.open = !!open;
+  const sum = document.createElement('summary');
+  sum.textContent = t.title;
+  box.appendChild(sum);
+  const body = document.createElement('div');
+  body.className = 'faq-a';
+  const p = document.createElement('p');
+  p.className = 'hint';
+  p.textContent = t.tagline;
+  body.appendChild(p);
+  const ol = document.createElement('ol');
+  ol.className = 'faq-steps';
+  for (const s of t.steps) {
+    const li = document.createElement('li');
+    li.textContent = s;
+    ol.appendChild(li);
+  }
+  body.appendChild(ol);
+  if (t.link) {
+    const line = document.createElement('p');
+    line.className = 'hint';
+    const a = document.createElement('a');
+    a.href = t.link;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'linklike';
+    a.textContent = t.link;
+    line.appendChild(a);
+    body.appendChild(line);
+  }
+  if (t.docs) {
+    const line = document.createElement('p');
+    line.className = 'hint';
+    const ask = document.createElement('span');
+    ask.textContent = '看不懂哪一步？';
+    line.appendChild(ask);
+    const a = document.createElement('a');
+    a.href = t.docs;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'linklike';
+    a.textContent = '看官方图文教程';
+    line.appendChild(a);
+    body.appendChild(line);
+  }
+  box.appendChild(body);
+  return box;
 }
 
 /**
- * 从教程 markdown 里挑出与 kind 相关的那部分。
- * 教程用「## 」分节，约定：出现「转写」字样的节给 asr 看，出现「笔记」的给 llm 看，
- * 「通用」「三步」「选择」「常见问题」两类都保留。挑不出来就把全文给出去，
- * 宁可多给也别给一片空白。
+ * 把 FAQ 画进 #faq-body。
+ *   keyword 为空 = 全部；一条都没匹配上时给一句换说法的提示。
  */
-function pickTutorialSection(md, kind) {
-  const lines = md.split('\n');
-  const blocks = [];
-  let cur = [];
-  for (const line of lines) {
-    if (/^#{1,2}\s/.test(line) && cur.length) {
-      blocks.push(cur);
-      cur = [];
-    }
-    cur.push(line);
-  }
-  if (cur.length) blocks.push(cur);
+function renderFaq(keyword = '') {
+  const host = $('faq-body');
+  if (!host) return;
+  const kw = String(keyword || '').trim().toLowerCase();
+  const hit = filterFaq(kw);
+  host.innerHTML = '';
 
-  const keep = blocks.filter((b) => {
-    const head = b.find((l) => /^#{1,2}\s/.test(l));
-    if (!head) return true; // 开头的说明段落，保留
-    const h = head.replace(/^#{1,2}\s*/, '');
-    const isAsr = /转写|语音|录音/.test(h);
-    const isLlm = /笔记|大模型|文本/.test(h);
-    if (isAsr && !isLlm) return kind === 'asr';
-    if (isLlm && !isAsr) return kind === 'llm';
-    return true; // 两家都相关的（选择指南、通用步骤、常见问题）
-  });
-  if (keep.length < 2) return md;
-  return keep.map((b) => b.join('\n')).join('\n\n');
+  const groups = faqSections();
+
+  // —— ① API 怎么申请 ——
+  const apiDef = groups.find((g) => g.id === 'api');
+  const curProvider = state.config?.asr?.provider || 'siliconflow';
+  const tuts = Object.keys(TUTORIALS)
+    .filter((id) => {
+      if (!kw) return true;
+      const t = TUTORIALS[id];
+      return (t.title + ' ' + t.tagline + ' ' + t.steps.join(' ')).toLowerCase().includes(kw);
+    })
+    .map((id) => [id, TUTORIALS[id]]);
+  if (tuts.length) {
+    const g = document.createElement('div');
+    g.className = 'faq-group';
+    const h = document.createElement('h4');
+    h.textContent = apiDef?.title || 'API 怎么申请';
+    g.appendChild(h);
+    // 只展开「现在正在用」的那一家：另外两家展开等于把弹窗撑成三屏。
+    for (const [id, t] of tuts) g.appendChild(faqTutorial(id, t, id === curProvider && !kw));
+    host.appendChild(g);
+  }
+
+  // —— ② 报错对照 ——
+  if (hit.errors.length) {
+    const g = document.createElement('div');
+    g.className = 'faq-group';
+    const h = document.createElement('h4');
+    h.textContent = '报错对照';
+    const tip = document.createElement('p');
+    tip.className = 'hint';
+    tip.textContent = '对着屏幕上那串字，找最像的一条点开。';
+    g.appendChild(h);
+    g.appendChild(tip);
+    for (const it of hit.errors) g.appendChild(faqItem(it.q, it.a, '', true));
+    host.appendChild(g);
+  }
+
+  // —— ③ 用法与设置 ——
+  if (hit.usage.length) {
+    const g = document.createElement('div');
+    g.className = 'faq-group';
+    const h = document.createElement('h4');
+    h.textContent = '用法与设置';
+    g.appendChild(h);
+    for (const it of hit.usage) g.appendChild(faqItem(it.q, it.a, it.lan ? state.lanNote : ''));
+    host.appendChild(g);
+  }
+
+  if (!host.children.length) host.appendChild(faqEmpty());
 }
 
 /**
@@ -2956,8 +3058,8 @@ function renderStorage(sys) {
   const intro = $('storage-intro');
   if (intro) {
     intro.innerHTML = remote
-      ? '录音和模型缓存放在哪。这一项<b>只能在跑这个服务的那台电脑上改</b> —— 手机改不了别人电脑上的存盘位置。下面显示的是那台电脑现在的实际位置。'
-      : '录音和模型缓存放在哪。默认就在安装目录下面；想换到别的盘，把路径改一下再点「迁移」，现有文件会复制过去（<b>旧目录不会删</b>）。';
+      ? ' 这一项<b>只能在跑服务的那台电脑上改</b>，下面显示的是那台电脑现在的实际位置。'
+      : '录音和模型放在哪。想换盘就改路径再点「迁移」，<b>旧目录不会删</b>。';
   }
   for (const [inId, btnId] of [
     ['s-lect-dir', 'btn-lect-dir-move'],
@@ -3536,9 +3638,6 @@ function bind() {
     // 用户主动换服务商：地址和模型一律跟着换，不要留上一家的残留
     applyProvider($('s-provider').value, { force: true });
   };
-  $('btn-help-api').onclick = () => showApiTutorial('all');
-  $('btn-help-api-llm').onclick = () => showApiTutorial('llm');
-  $('btn-api-close').onclick = () => ($('api-modal').hidden = true);
   // 协议：设置里「用户协议 / 隐私政策」两个链接 + 弹窗里的标签页
   $('btn-show-license').onclick = () => showAgreement('read', 'license');
   $('btn-show-privacy').onclick = () => showAgreement('read', 'privacy');
@@ -3575,8 +3674,17 @@ function bind() {
       toast('没能保存这个选择：' + err.message, 'err');
     }
   };
-  $('btn-help').onclick = () => ($('help-modal').hidden = false);
+  /* 常见问题：内容在 public/faq.js，这里只负责开关与搜索。
+     每次打开都重画一遍 —— 里面「现在用的是哪家服务商」会变（要展开哪家的教程），
+     缓存住就得在切换服务商时记得刷新一次，迟早漏。重画一次几十毫秒，不值当省。 */
+  $('btn-help').onclick = () => {
+    const q = $('faq-search');
+    if (q) q.value = '';
+    renderFaq('');
+    $('help-modal').hidden = false;
+  };
   $('btn-help-close').onclick = () => ($('help-modal').hidden = true);
+  $('faq-search').oninput = (e) => renderFaq(e.target.value);
   $('btn-health').onclick = () => {
     $('settings-modal').hidden = false;
     $('diag-sect').scrollIntoView();
@@ -4003,17 +4111,19 @@ async function boot() {
       try {
         lanOn = (await api('/lan')).enabled === true;
       } catch {}
+      // 常见问题里「手机传录音」那一条要显示真实地址，所以只存文案，
+      // 由 renderFaq() 打开时现拼 —— 弹窗关着的时候这个 id 根本不存在。
       if (!lan.length) {
         $('lan-hint').textContent =
           '想用手机直接上传录音？这个服务启动时只绑了本机，用启动器重新启动后才能开「手机访问」。';
-        $('help-lan').textContent = '（这个服务只绑了本机，手机连不上）';
+        state.lanNote = '这台机器上服务只绑了本机，手机连不上。';
       } else if (!lanOn) {
         $('lan-hint').textContent =
           '想用手机上传录音？先到 设置 → ④ 手机访问 把开关打开，地址就会出现在这里。';
-        $('help-lan').textContent = '（先到 设置 → ④ 手机访问 打开开关，地址会显示在这里）';
+        state.lanNote = '先在 设置 → ④ 手机访问 打开开关，地址会显示在这里。';
       } else {
         $('lan-hint').textContent = `手机上传地址（连同一个 Wi-Fi）：${lan.join('  ')}`;
-        $('help-lan').textContent = lan.join('   ');
+        state.lanNote = `现在这台电脑的地址：${lan.join('   ')}`;
       }
     }
   } catch (e) {

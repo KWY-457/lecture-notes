@@ -182,7 +182,7 @@ export const PROVIDERS = [
     // SenseVoice 不认 response_format=verbose_json，加了会直接 400
     // （服务端据此决定要不要加）
     verbose: false,
-    note: '按量计费：转写按音频时长，笔记按 tokens。新人注册一般送十几元额度，够转几十小时。吃不占本机性能。',
+    note: '按量计费：转写按音频时长，笔记按 tokens。新人注册一般送十几元额度，够转几十小时。不吃本机性能。',
     console: 'https://cloud.siliconflow.cn/account/ak',
     docs: 'https://docs.siliconflow.cn/',
     setup: [

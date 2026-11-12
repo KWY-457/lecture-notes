@@ -54,6 +54,7 @@ const OFFLINE = [
   ['test-note-header.mjs', '笔记页眉用真实元数据覆盖'],
   ['test-pipeline.mjs', '笔记生成流水线'],
   ['test-llm-prompt.mjs', 'AI 笔记提示词：重点条数真的生效（自适应/固定都验）'],
+  ['test-faq.mjs', '常见问题：报错原文对得上代码、搜索只匹问答、教程复用引导那一份'],
   ['test-mindmap-labels.mjs', '思维导图标签：强信号优先、泛词不要、抽不出就空着'],
   ['test-mindmap-leaf.mjs', '思维导图叶子：压缩成命题 + 类型标签，抽不出就空着'],
   ['test-tex.mjs', 'LaTeX 公式渲染：分数/上下标/希腊字母/极端输入不崩'],

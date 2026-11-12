@@ -89,7 +89,7 @@
     <ul id="lecture-list" class="lecture-list"></ul>
     <div class="side-foot phone-hide">
       <button class="btn ghost tiny" id="btn-health">环境自检</button>
-      <button class="btn ghost tiny" id="btn-help">使用说明</button>
+      <button class="btn ghost tiny" id="btn-help">常见问题</button>
     </div>
   </aside>
 
@@ -316,7 +316,6 @@
           </select>
           <p class="hint" id="s-provider-hint"></p>
         </div>
-        <p class="hint">转写与 AI 笔记共用一家服务商，同一把 Key 两处通用。如不清楚如何申请 API Key：<button type="button" class="linklike" id="btn-help-api">查看申请教程</button></p>
 
         <div class="grid2" data-for="local">
           <div class="field">
@@ -394,7 +393,6 @@
         </div>
         <button class="btn ghost tiny" data-for="cloud" id="btn-test-asr">检查云端转写配置</button>
         <span class="test-result" id="asr-test-result"></span>
-        <p class="hint" data-for="cloud">此操作不发送音频、不产生费用，仅检查「地址 / 模型 / Key」是否填写完整。如需验证实际效果，可上传一段一分钟左右的录音进行转写。</p>
         <!-- 「录音语言」不在这里：它是每节课不同的事（英语课 vs 中文课），
              归到每条录音自己的笔记设置里，见新建录音弹窗的 #nl-language。 -->
       </section>
@@ -423,7 +421,6 @@
         </div>
         <button class="btn ghost tiny" id="btn-test-llm">测试连通性</button>
         <span class="test-result" id="llm-test-result"></span>
-        <p class="hint">低配电脑建议用云端：本机跑 7B 模型常驻要 6GB 左右显存，边转写边做笔记容易卡。怎么申请 Key：<button type="button" class="linklike" id="btn-help-api-llm">查看申请教程</button></p>
       </section>
 
       <section class="sect">
@@ -593,50 +590,18 @@
   </div>
 </div>
 
-<!-- ============ 使用说明 ============ -->
+<!-- ============ 常见问题 ============ -->
 <div class="modal" id="help-modal" hidden>
   <div class="modal-card wide">
     <div class="modal-head">
-      <h3><svg class="i"><use href="#i-book"/></svg>使用说明</h3>
+      <h3><svg class="i"><use href="#i-book"/></svg>常见问题</h3>
       <button class="icon-btn" id="btn-help-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
-    <div class="settings-body help-body">
-      <h4>最快的用法</h4>
-      <ol>
-        <li>使用手机自带的「录音机」录制整节课（保持连续录制，中途无需暂停）。</li>
-        <li>课后让手机连接 Wi-Fi。先在电脑上打开 <b>设置 → ④ 手机访问</b> 把开关打开，下方就会显示该访问的地址：
-          <div class="code-line" id="help-lan">（开关打开后会显示）</div>
-        </li>
-        <li>在手机页面点「导入录音」，选中刚才录的文件，等进度条走完。<b>传完记得回电脑把开关关掉。</b></li>
-        <li>回到电脑浏览器，打开同一条录音，点「① 开始转写」，转写完笔记会自动出现。</li>
-        <li>点「导出 Word」，用 Word / WPS 打开就是一份复习笔记，也可以在里面另存为 PDF。</li>
-      </ol>
-      <h4>为什么转写建议在电脑上做？</h4>
-      <p>手机浏览器在 http 页面中没有麦克风权限，且本地 Whisper 依赖 WebGPU，手机端无法运行。因此：<b>手机负责录音与上传，电脑负责转写与整理。</b>若电脑配置较低，可在设置中改用云端转写接口。</p>
-      <h4>时间戳的用途</h4>
-      <p>笔记与逐字稿中的 <code>12:34</code> 均可点击，点击后音频将跳转到对应位置，便于回听核对。</p>
-      <h4>数据在哪？</h4>
-      <p>全部存在本地数据目录里（默认 <code>%LOCALAPPDATA%\LectureNotes\data</code>，装完想换盘就到 设置 → ③ 存储位置 改）：音频、逐字稿、笔记。不上传任何服务器（除非你自己开了云端转写）。整个目录拷走就是备份。</p>
-      <h4>长录音的注意事项</h4>
-      <ul>
-        <li>单段建议 90 分钟以内；特别长的课建议按节次分开录、分开导。</li>
-        <li>浏览器里做本地转写时，程序要把整段音频解码进内存，1 小时立体声大约占 1GB 内存。内存吃紧就改用云端转写。</li>
-        <li>转写过程中请不要关掉这个标签页。</li>
-      </ul>
+    <div class="faq-search">
+      <svg class="i"><use href="#i-search"/></svg>
+      <input id="faq-search" type="search" placeholder="搜报错原文或问题，比如 401、备份、时间戳" autocomplete="off">
     </div>
-  </div>
-</div>
-
-<!-- ============ 云端 API 接入教程 ============ -->
-<div class="modal" id="api-modal" hidden>
-  <div class="modal-card wide">
-    <div class="modal-head">
-      <h3><svg class="i"><use href="#i-key"/></svg>云端 API 怎么配</h3>
-      <button class="icon-btn" id="btn-api-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
-    </div>
-    <div class="settings-body help-body" id="api-body">
-      <p class="hint">正在读取教程…</p>
-    </div>
+    <div class="settings-body help-body" id="faq-body"></div>
   </div>
 </div>
 

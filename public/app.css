@@ -1045,6 +1045,63 @@ body.remote .empty-card > p { margin-bottom: 16px; }
   border: 1px solid var(--line); color: var(--text);
 }
 
+/* ---------- 常见问题 ----------
+   搜索条要一直看得见：报错对照有十九条，滚到第八条还想再搜一次是很正常的，
+   滚回去找搜索框就烦人了。它其实是滚动容器外面的兄弟节点（只有 #faq-body 自己滚），
+   本来就一动不动；sticky 是第二道保险 —— 万一哪天卡片改成整体滚动也不会飘走。 */
+.faq-search {
+  position: sticky; top: 0; z-index: 2; background: var(--panel);
+  padding: 10px 20px 10px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+}
+.faq-search .i { color: var(--muted-2); width: 16px; height: 16px; flex: none; }
+.faq-search input {
+  flex: 1 1 auto; min-width: 0; padding: 7px 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); background: var(--panel-2); font-size: 13.5px;
+  transition: border-color .14s var(--ease), background .14s var(--ease);
+}
+.faq-search input:focus { background: var(--panel); border-color: var(--line-2); outline: none; }
+/* 浏览器自带的搜索框叉号在深色底上很脏，交给用户自己退格 */
+.faq-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.faq-group + .faq-group { margin-top: 6px; }
+.faq-group h4 {
+  margin: 20px 0 8px; font-size: 13px; letter-spacing: .04em;
+  color: var(--muted-2); font-weight: 600;
+}
+.faq-group:first-child h4 { margin-top: 6px; }
+
+/* 一问一条。默认全折叠 —— 标题就是屏幕上的报错原文，扫一眼认出来再点开。
+   折起来之后整页只有二十来行，比摊开三屏好找得多。 */
+.faq-item { border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.faq-item > summary {
+  cursor: pointer; padding: 9px 2px; font-size: 13.5px; line-height: 1.55;
+  color: var(--text); list-style: none; display: flex; gap: 8px; align-items: baseline;
+}
+.faq-item > summary::-webkit-details-marker { display: none; }
+/* 自己画三角：默认的 ▶ 在各个浏览器里大小位置都不一样，跟正文对不齐 */
+.faq-item > summary::before {
+  content: ''; flex: none; width: 0; height: 0; margin-top: .42em;
+  border-left: 5px solid var(--muted-2);
+  border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transition: transform .14s var(--ease);
+}
+.faq-item[open] > summary::before { transform: rotate(90deg); }
+.faq-item > summary:hover { color: var(--brand); }
+.faq-item > summary:hover::before { border-left-color: var(--brand); }
+/* 报错那条的标题是代码原文，用等宽字体才像「屏幕上那串字」 */
+.faq-item > summary.mono { font-family: var(--mono); font-size: 12.5px; }
+
+.faq-a { padding: 0 2px 10px 13px; font-size: 13.5px; line-height: 1.72; color: var(--text-2); }
+.faq-a p { margin: 6px 0; }
+.faq-a ol, .faq-a ul { padding-left: 20px; margin: 6px 0; }
+.faq-a li { margin: 4px 0; }
+.faq-a code { font-family: var(--mono); font-size: .9em; background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
+
+.faq-steps { padding-left: 20px; margin: 6px 0; }
+.faq-steps li { margin: 5px 0; line-height: 1.7; }
+.faq-empty { margin: 18px 0; }
+
 /* ---------- 用户协议 / 隐私政策 ---------- */
 .about-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
