@@ -670,7 +670,13 @@ if (lecture) {
   fire(provSel, 'change');
   check('切到 OpenAI 后接口地址被填上', /api\.openai\.com/.test(epEl.value), epEl.value);
   check('切到 OpenAI 后模型被填上', mdEl.value.length > 0, mdEl.value);
-  check('切换后提示含申请地址', /申请地址|接口：/.test(doc.getElementById('s-provider-hint').textContent), '');
+  // 设置面板里那些「按量计费 / 申请地址 / 转写接口」的长解释已经全删了
+  // （老大 2026-11-12：多余的说明去掉，教程搬进常见问题）。这里守反向断言，
+  // 免得以后又有人把它们加回来。
+  check('服务商下拉下面不再挂长解释', doc.getElementById('s-provider-hint') === null, '');
+  check('AI 润色那一节也不再挂长解释', doc.getElementById('s-llm-hint') === null, '');
+  check('存储位置不再挂说明段落', doc.getElementById('storage-intro') === null, '');
+  check('设置里没有「清掉当前用的 Key」按钮', doc.getElementById('btn-clear-key') === null, '');
   provSel.value = 'custom';
   fire(provSel, 'change');
   check('切到自定义后清空地址（免得被上一家盖住）', epEl.value === '', epEl.value);
@@ -818,18 +824,7 @@ if (lecture) {
   check('再次打开时搜索框是空的', (doc.getElementById('btn-help').onclick(), faqSearch.value === ''), faqSearch.value);
   doc.getElementById('btn-help-close').onclick();
 
-  /* --- 云端接入：清掉已保存的 Key（confirm 允许之后应当真的发 PUT）--- */
-  globalThis.confirm = () => true;
-  doc.getElementById('s-provider').value = 'siliconflow';
-  fire(doc.getElementById('s-provider'), 'change');
-  const beforeClears = fetchLog.filter((l) => l === 'PUT /api/config').length;
-  await doc.getElementById('btn-clear-key').onclick();
-  await new Promise((r) => setTimeout(r, 300));
-  check(
-    '清 Key 按钮真的发了保存请求',
-    fetchLog.filter((l) => l === 'PUT /api/config').length > beforeClears,
-    fetchLog.filter((l) => l.startsWith('PUT')).join(' | ')
-  );
+  /* --- 云端接入：清 Key 的入口已删除（改用「已保存的 Key」清单逐把删除）--- */
   provSel.value = 'custom';
   fire(provSel, 'change');
   check('自定义服务商地址栏可手填（切到 custom 后为空）', doc.getElementById('s-asr-endpoint').value === '', '');

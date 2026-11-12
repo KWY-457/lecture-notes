@@ -8,7 +8,7 @@ import { generateAINote, cleanTranscriptViaLLM, applyNoteHeader } from './llm.js
 import { cleanSegments } from './cleanup.js';
 import { outlineFromMarkdown as noteOutlineFromMarkdown } from './note.js';
 import { topicLeaves } from './mindmap.js';
-import { optionsFor, getProvider, modelsFor, defaultModel, estimateCost, PROVIDER_VERSION, sortedModels, TIERS, modelSpec } from './providers.js';
+import { optionsFor, getProvider, modelsFor, defaultModel, PROVIDER_VERSION, sortedModels, TIERS, modelSpec } from './providers.js';
 import { createOnboard, shouldOnboard, TUTORIALS } from './onboard.js';
 import { filterFaq, sections as faqSections } from './faq.js';
 
@@ -1985,18 +1985,6 @@ function allProviderEntries() {
   return out;
 }
 
-/** 「整理一节课大概花多少钱」的粗略提示；没写单价的返回空串 */
-function costHintFor(id) {
-  try {
-    const e = estimateCost(id, defaultModel(id, 'llm'), 1.5);
-    if (!e) return '';
-    const y = e.yuan;
-    return `整理 1.5 小时的课约 ${y < 0.01 ? '不到 1 分钱' : y.toFixed(2) + ' 元'}（按 ${e.model} 估算，仅量级参考）`;
-  } catch {
-    return '';
-  }
-}
-
 /**
  * 合并下拉（老大要求：转写和 AI 笔记用同一家服务商，一把 Key 两处都用）。
  *
@@ -2006,7 +1994,6 @@ function costHintFor(id) {
  *
  * - asr.provider：照抄下拉。本地就是 local，云端四家都是同一家
  * - llm.provider：同一家。local 也有本地大模型那一档，所以不再留空
- * - 提示拆两处：s-provider-hint 讲转写侧，s-llm-hint 讲笔记侧
  * - force：用户手动切换下拉时，把预设地址/模型摊进输入框，别留上一家的残留
  */
 function applyProvider(id, { force = false } = {}) {
@@ -2014,46 +2001,6 @@ function applyProvider(id, { force = false } = {}) {
   // 本地转写没有地址、不需要 Key，所以对「转写侧」按没有服务商处理
   const asrP = isLocal ? null : getProvider(id, 'asr');
   const llmP = getProvider(id, 'llm');
-  const hint = $('s-provider-hint');
-  const llmHint = $('s-llm-hint');
-
-  // —— 转写侧 ——
-  const asrBits = [];
-  if (isLocal) {
-    asrBits.push(
-      '转写走本地 Whisper（在浏览器里跑）：免费、录音不出本机。代价：首次要下几百 MB 到 1.3GB 模型，转写时吃内存和显卡；电脑配置一般会明显卡顿。'
-    );
-  } else if (asrP) {
-    if (asrP.note) asrBits.push(asrP.note);
-    if (asrP.free) asrBits.push('新用户通常有免费额度。');
-    // 自定义服务商的地址是用户手填的，不在这里再说一次（下面就有输入框）
-    if (id !== 'custom') {
-      const url = asrP.asrUrl || asrP.baseUrl || '';
-      if (url) asrBits.push(`转写接口：${url}`);
-    }
-    // 模型不在这里重复列 —— 下面就是卡片选择器，同一句话说两遍反而看不清重点。
-  } else {
-    asrBits.push('这家没有语音转写接口：转写会自动退回「本地」');
-  }
-  if (hint) hint.textContent = asrBits.join(' ');
-
-  // —— 笔记侧 ——
-  if (llmHint) {
-    if (isLocal) {
-      llmHint.textContent =
-        '笔记用本机大模型 qwen2.5-7b：不联网、不花钱，但常驻要 6GB 左右显存。需要先在 ⑥ 环境自检里部署本地模型（共约 4.4GB）；没部署时「AI 润色」会自动退回离线引擎挑重点。';
-    } else if (llmP) {
-      const bits = [];
-      if (llmP.free) bits.push('新用户通常有免费额度。');
-      const cost = costHintFor(id);
-      if (cost) bits.push(cost);
-      if (llmP.console) bits.push(`申请地址：${llmP.console}`);
-      bits.push('申请步骤看上面①的「怎么申请服务商」。');
-      llmHint.textContent = bits.join(' ');
-    } else {
-      llmHint.textContent = '这家不支持大模型笔记；「AI 润色」会退回本机离线引擎。';
-    }
-  }
 
   // —— 输入框自动填充 ——
   const base = $('s-llm-base');
@@ -2443,7 +2390,6 @@ function renderFaq(keyword = '') {
  */
 function renderKeyVault(list) {
   const box = $('key-list');
-  const hint = $('key-hint');
   state.keyVault = list || [];
   if (!box) return;
 
@@ -2452,7 +2398,6 @@ function renderKeyVault(list) {
   box.innerHTML = '';
   if (!state.keyVault.length) {
     box.hidden = true;
-    if (hint) hint.textContent = '还没有存过 Key。粘贴一把点对勾，以后换服务商可以直接从下面选回来。';
     return;
   }
   box.hidden = false;
@@ -2488,7 +2433,6 @@ function renderKeyVault(list) {
     row.onclick = () => pickVaultKey(v);
     box.appendChild(row);
   }
-  if (hint) hint.textContent = `已存 ${state.keyVault.length} 把。点下面任意一把可以切过去，删掉的那把不影响正在用的。`;
 }
 
 /** 点清单里的某一行 → 填进输入框（真正切换要再点「保存设置」） */
@@ -3055,12 +2999,6 @@ function renderStorage(sys) {
   // 所以这里把输入框和按钮都禁掉、并把引导文案换掉 ——
   // 不然用户会以为「填了没反应」是坏了。
   const remote = sys.local === false;
-  const intro = $('storage-intro');
-  if (intro) {
-    intro.innerHTML = remote
-      ? ' 这一项<b>只能在跑服务的那台电脑上改</b>，下面显示的是那台电脑现在的实际位置。'
-      : '录音和模型放在哪。想换盘就改路径再点「迁移」，<b>旧目录不会删</b>。';
-  }
   for (const [inId, btnId] of [
     ['s-lect-dir', 'btn-lect-dir-move'],
     ['s-models-dir', 'btn-models-dir-move'],
@@ -3923,26 +3861,6 @@ function bind() {
     }
   };
 
-
-  // 清掉「当前正在用」的 Key。空字符串在服务端表示「不修改」，所以要显式发 clearApiKey，
-  // 否则用户根本没有办法把自己粘错的 Key 删掉。合并下拉后转写和笔记共用一把 Key，一次清两处。
-  // 注意：这不影响「已保存的 Key」清单 —— 清单里的其它几把还留着，随时能选回来。
-  $('btn-clear-key').onclick = async () => {
-    if (!confirm('确定清掉当前正在用的 API Key？\n\n清掉之后云端转写和 AI 笔记会立刻不能用，需要重新申请或重新粘贴。\n（已保存的 Key 清单不受影响）')) return;
-    try {
-      const data = await api('/config', { method: 'PUT', body: { asr: { clearApiKey: true }, llm: { clearApiKey: true } } });
-      state.config = data.config;
-      state.keyVault = data.config.keyVault || [];
-      $('s-key').value = '';
-      $('s-key').placeholder = '粘贴你的 API Key';
-      renderKeyVault(state.keyVault);
-      $('asr-test-result').textContent = '已清掉当前用的 Key';
-      $('llm-test-result').textContent = '已清掉当前用的 Key';
-      toast('已清掉当前用的 Key', 'ok');
-    } catch (e) {
-      toast('清除失败：' + e.message, 'err');
-    }
-  };
 
   // 拖拽导入
   let dragDepth = 0;

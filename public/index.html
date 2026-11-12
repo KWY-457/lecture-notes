@@ -314,7 +314,6 @@
           <select id="s-provider">
             <option value="local">本地 · 免费、不上传</option>
           </select>
-          <p class="hint" id="s-provider-hint"></p>
         </div>
 
         <div class="grid2" data-for="local">
@@ -388,8 +387,6 @@
           <!-- 下面每一行 = 一把已保存的 Key，点一下就切过去（切过去后再点保存）。
                当前用的那条左边有竖条、底色更亮；删除按钮悬停才出现。 -->
           <div class="key-list" id="key-list" hidden></div>
-          <p class="hint" id="key-hint"></p>
-          <button type="button" class="linklike danger" id="btn-clear-key">清掉当前用的 Key</button>
         </div>
         <button class="btn ghost tiny" data-for="cloud" id="btn-test-asr">检查云端转写配置</button>
         <span class="test-result" id="asr-test-result"></span>
@@ -411,7 +408,6 @@
             <input id="s-llm-model" placeholder="qwen2.5-7b" autocomplete="off" spellcheck="false">
             <span class="hint">照抄服务商文档里的模型名</span>
           </div>
-          <p class="hint" id="s-llm-hint"></p>
         </div>
         <div class="grid2">
           <div class="field">
@@ -425,7 +421,6 @@
 
       <section class="sect">
         <h4>③ 存储位置</h4>
-        <p class="hint" id="storage-intro">录音和模型缓存放在哪。默认就在安装目录下面；想换到别的盘，把路径改一下再点「迁移」，现有文件会复制过去（<b>旧目录不会删</b>）。</p>
         <div class="field">
           <label for="s-lect-dir">录音目录 <span class="hint" id="s-lect-dir-now"></span></label>
           <div class="path-row">
