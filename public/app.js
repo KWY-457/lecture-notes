@@ -997,7 +997,10 @@ async function doTranscribe() {
   const L = state.current?.lecture;
   if (!L) return;
   const id = L.id;
-  const cfg = state.config.asr;
+  // 语种是**这条录音自己的**：notePrefs.language 优先，没设过才退到设置里的
+  // 全局默认 config.asr.language。其余字段（provider / 模型 / 降噪…）仍是全局的 ——
+  // 那些换一次要下模型或填 Key，不适合按条设。
+  const cfg = { ...state.config.asr, language: L.notePrefs?.language || state.config.asr.language };
   const isCloud = cfg.provider !== 'local';
 
   // 本录音已经在跑任务（转写或笔记）→ 不重复开第二条。
@@ -1540,6 +1543,8 @@ function openNewLecture(opts = {}) {
   $('nl-extra').value = typeof p.extraPrompt === 'string' ? p.extraPrompt : '';
   $('nl-style').value = p.style || state.config?.notes?.style || 'exam';
   $('nl-maxpoints').value = String(p.maxPointsPerTopic != null ? p.maxPointsPerTopic : 0);
+  // 语言：没单独设过就跟随设置里的全局默认（config.asr.language，默认 zh）。
+  $('nl-language').value = p.language || state.config?.asr?.language || 'zh';
   // 存的条数不在下拉列表里（比如老配置存的 6，列表里有；但用户手改过 config
   // 存了 7 就没有对应 option），select 会自动变成空值 —— 补一个临时项，
   // 否则用户一打开就发现自己的设置「变成自适应」了。
@@ -1557,6 +1562,23 @@ function openNewLecture(opts = {}) {
   const syncDesc = () => (descEl.textContent = STYLE_DESC[$('nl-style').value] || '');
   $('nl-style').onchange = syncDesc;
   syncDesc();
+
+  // 语言的说明要按「本地还是云端」分开写：本地 Whisper 不告诉它语种会整段飘掉
+  // （实测不传时只吐出「(speaking in foreign language)」），云端几家则不一定认这个字段
+  // （Qwen3-ASR 自己判语种、压根不看；SenseVoice 认，传错会直接按错语种识别）。
+  const langDescEl = $('nl-language-desc');
+  const syncLangDesc = () => {
+    const v = $('nl-language').value;
+    if (v === 'auto') {
+      langDescEl.textContent = '交给引擎自己猜。本地转写不建议选这个 —— 实测不指定语种时，一两分钟的短录音常被猜成外语，整段只剩「(speaking in foreign language)」。';
+    } else if (v === 'zh') {
+      langDescEl.textContent = '中文课。本地转写必须指定语种，否则容易整段丢字；云端大部分模型自己也认得出来。';
+    } else {
+      langDescEl.textContent = '英语课。选错语种云端会真的按那种语言识别：中文课选成 English，实测只输出了四分之一的内容。';
+    }
+  };
+  $('nl-language').onchange = syncLangDesc;
+  syncLangDesc();
 
   modal.hidden = false;
   // 名字框自动聚焦并全选：用户多半要改「课堂录音-20261023」这种自动名，
@@ -1584,6 +1606,7 @@ function openNewLecture(opts = {}) {
       $('btn-nl-create').onclick = null;
       nameIn.onkeydown = null;
       $('nl-style').onchange = null;
+      $('nl-language').onchange = null;
       modal.removeEventListener('keydown', onKey);
       resolve(val);
     };
@@ -1600,6 +1623,8 @@ function openNewLecture(opts = {}) {
           style: $('nl-style').value,
           // 0 = 自适应，是个合法值，必须原样存下去，不能被 || 变成 6。
           maxPointsPerTopic: Number($('nl-maxpoints').value) || 0,
+          // 语种也归到这条录音自己：同一台电脑上午听英语课、下午听中文课很常见。
+          language: $('nl-language').value,
         },
       });
     };
@@ -2409,7 +2434,7 @@ async function openSettings() {
   $('s-key').type = 'password';
   $('s-key').placeholder = c.asr.hasApiKey || c.llm.hasApiKey ? '已保存（可直接修改）' : '粘贴你的 API Key';
   renderKeyVault(c.keyVault || []);
-  $('s-language').value = c.asr.language;
+  // 语种已经搬到每条录音的笔记设置里（#nl-language），设置面板不再有这一项。
   $('s-llm-enabled').checked = !!c.llm.enabled;
   $('s-llm-base').value = c.llm.baseUrl || '';
   $('s-llm-model').value = c.llm.model || '';
@@ -3195,7 +3220,9 @@ async function saveSettings() {
       modelHost: $('s-model-host').value,
       endpoint: $('s-asr-endpoint').value.trim(),
       model: $('s-asr-model').value.trim(),
-      language: $('s-language').value,
+      // 不提交 language：它归每条录音自己的 notePrefs.language（新建录音弹窗里设），
+      // 设置面板写它会把用户为某条录音选过的语种统一改掉。config.asr.language
+      // 只作为「没单独设过的录音」的默认值，留在 DEFAULT_CONFIG 里即可。
     },
     llm: {
       enabled: $('s-llm-enabled').checked,
@@ -3732,9 +3759,12 @@ function bind() {
       return;
     }
     try {
+      // 语种取这条录音自己的（检查的就是它到时候真要用的那套），
+      // 没有就退全局默认；auto 发空串 = 交给服务商自己判。
+      const lang = L.notePrefs?.language || state.config?.asr?.language || 'zh';
       const r = await api(`/lectures/${L.id}/transcribe`, {
         method: 'POST',
-        body: { checkOnly: true, language: $('s-language').value === 'auto' ? '' : $('s-language').value },
+        body: { checkOnly: true, language: lang === 'auto' ? '' : lang },
       });
       out.innerHTML = `<span class="res-ok">${icon('check', 'sm')}配置齐了：${esc(r.name || r.provider)} → ${esc(r.url)}（模型 ${esc(r.model)}${r.verbose ? '' : '，该服务商不支持逐段时间戳'}）</span>`;
     } catch (e) {

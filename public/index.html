@@ -278,6 +278,17 @@
       </div>
     </div>
     <p class="hint" id="nl-style-desc"></p>
+
+    <div class="field phone-hide">
+      <label for="nl-language">录音语言 <span class="hint">（影响转写准确度）</span></label>
+      <select id="nl-language">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="auto">自动识别</option>
+      </select>
+      <p class="hint" id="nl-language-desc"></p>
+    </div>
+
     <p class="hint" id="nl-hint">风格、重点条数、提示词都只对这条录音生效。以后想改，打开它点「笔记设置」。</p>
 
     <div class="modal-actions">
@@ -384,17 +395,8 @@
         <button class="btn ghost tiny" data-for="cloud" id="btn-test-asr">检查云端转写配置</button>
         <span class="test-result" id="asr-test-result"></span>
         <p class="hint" data-for="cloud">此操作不发送音频、不产生费用，仅检查「地址 / 模型 / Key」是否填写完整。如需验证实际效果，可上传一段一分钟左右的录音进行转写。</p>
-
-        <div class="grid2">
-          <div class="field">
-            <label>录音语言</label>
-            <select id="s-language">
-              <option value="zh">中文</option>
-              <option value="en">English</option>
-              <option value="auto">自动识别</option>
-            </select>
-          </div>
-        </div>
+        <!-- 「录音语言」不在这里：它是每节课不同的事（英语课 vs 中文课），
+             归到每条录音自己的笔记设置里，见新建录音弹窗的 #nl-language。 -->
       </section>
 
       <section class="sect">

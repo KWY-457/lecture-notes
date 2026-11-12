@@ -349,6 +349,9 @@ const settings = await cdp.eval(`(async () => {
     // 「笔记风格」已经从设置搬到新建录音弹窗（2026-10-23），这里改成
     // 验「设置里确实没有了、弹窗里确实有」，两个方向都得看。
     styleGone: document.getElementById('s-style') === null,
+    // 录音语言同理（2026-11-12 搬到新建录音弹窗）：设置里必须没有、弹窗里必须有三档。
+    langGone: document.getElementById('s-language') === null,
+    nlLang: document.getElementById('nl-language') ? [...document.getElementById('nl-language').options].map((o) => o.value).join(',') : '',
     nlStyle: document.getElementById('nl-style') ? document.getElementById('nl-style').options.length : 0,
     nlOptions: document.getElementById('nl-maxpoints') ? document.getElementById('nl-maxpoints').options.length : 0,
     diagRows: diag.querySelectorAll('.diag-row').length,
@@ -363,6 +366,8 @@ check('模型选择器有值', G.model.length > 0, G.model);
 check('CDN 有默认值', G.cdn.includes('jsdelivr'), G.cdn);
 check('笔记风格已从设置里搬走', G.styleGone === true, 's-style 应已移除');
 check('新建录音弹窗有风格选项', G.nlStyle >= 3, `options=${G.nlStyle}`);
+check('录音语言已从设置里搬走', G.langGone === true, 's-language 应已移除');
+check('新建录音弹窗有录音语言三档', G.nlLang === 'zh,en,auto', G.nlLang);
 check('新建录音弹窗有重点条数选项', G.nlOptions >= 5, `options=${G.nlOptions}`);
 check('环境自检渲染出多行', G.diagRows >= 4, `rows=${G.diagRows}`);
 check('自检报告提到 WebGPU', G.diagText.includes('WebGPU'), G.diagText.slice(0, 120));

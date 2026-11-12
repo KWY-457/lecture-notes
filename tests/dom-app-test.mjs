@@ -597,6 +597,16 @@ if (lecture) {
   check('弹窗有提示词输入框', !!nlExtra && nlExtra.tagName === 'TEXTAREA', nlExtra ? nlExtra.tagName : '不存在');
   check('重点条数有「自适应」档', [...nlMax.children].some((o) => o.value === '0'), `选项=${[...nlMax.children].map((o) => o.value).join(',')}`);
   check('笔记风格覆盖三档', ['exam', 'outline', 'cornell'].every((v) => [...nlStyle.children].some((o) => o.value === v)), '');
+  // 录音语言从设置面板搬到了这里（2026-11-12）：同一台电脑可能上午英语课下午中文课，
+  // 它是**每节课不同**的事，不该做成全局开关。
+  const nlLang = doc.getElementById('nl-language');
+  check('弹窗有录音语言下拉', !!nlLang && nlLang.tagName === 'SELECT', nlLang ? nlLang.tagName : '不存在');
+  check(
+    '录音语言有中文/英语/自动识别三档',
+    !!nlLang && ['zh', 'en', 'auto'].every((v) => [...nlLang.children].some((o) => o.value === v)),
+    nlLang ? [...nlLang.children].map((o) => o.value).join(',') : ''
+  );
+  check('设置面板里已经没有录音语言了', doc.getElementById('s-language') === null, '');
   doc.getElementById('new-lecture-modal').hidden = true;
 
   /* --- 每条录音的笔记偏好真的能存能读 --- */
