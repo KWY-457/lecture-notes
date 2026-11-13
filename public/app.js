@@ -246,7 +246,7 @@ function syncToolbar() {
   // 已经转过的录音，按钮不能还喊「① 开始转写」—— 那是在催人再转一遍，
   // 而转写是最贵的一步（本地几分钟、云端按分钟计费）。改成「重新转写」，
   // 并且去掉 primary 蓝底：蓝底是「下一步该点我」的信号，
-  // 转写完成之后该被看见的是「重新生成笔记」，不是「再转一遍」。
+  // 转写完成之后该被看见的是「AI 润色」，不是「再转一遍」。
   const done = state.current?.lecture?.status === 'transcribed';
   tb.disabled = !id || !!running || !!blocked;
   if (running) {
@@ -303,8 +303,8 @@ function syncToolbar() {
     // 这两个 title 得跟 index.html 里写的一致：syncToolbar 每次状态变化都会把 title
     // 覆写一遍，index.html 里那句只是首帧用的，两边不同步就会出现「鼠标移上去
     // 一会儿是旧文案、一会儿是新文案」的精神分裂。
-    $('btn-notes').title = '转写完成后笔记会自动生成；想按新设置重做时点这里';
-    $('btn-notes-ai').title = '用大模型把口语润色成书面笔记';
+    $('btn-notes').title = '用离线引擎重做一份：不联网、不花钱，句子是老师原话';
+    $('btn-notes-ai').title = '转写完成后会自动润色；想重做或改风格后重来点这里';
   }
 
   // 旧字段跟着任务表同步，外部脚本读 state.busy 时不会看到假的「忙」
@@ -762,7 +762,7 @@ function renderMindMapView(note) {
   // 离线笔记的 markdown 没有这种结构，才回退到离线提纲。
   let outline = outlineFromMarkdown(note?.markdown);
   if (!outline.length) outline = note?.data?.outline || [];
-  if (!outline.length) return '<p class="placeholder">还没有提纲。先点「重新生成笔记」。</p>';
+  if (!outline.length) return '<p class="placeholder">还没有提纲。先点「AI 润色」。</p>';
   // outlineFromMarkdown() 是重新解析出来的对象，**不带 data.outline 里的
   // localKeywords**（那是离线引擎逐主题算的专有名词，是导图最好的标签来源之一）。
   // 按标题把两边对起来补回去；标题对不上就当成没有，不影响其它字段。
@@ -1037,6 +1037,8 @@ async function doTranscribe() {
   job.stoppedLLM = false; // 每次转写重新判断，别把上一轮的残留算进来
   // 转写成功且真出东西时置 true，finally 里据此补一篇离线笔记（详见 finally 的注释）
   let autoNote = false;
+  // 这篇笔记走不走大模型。默认 false，只有 llmReadyForAuto() 点头才置 true。
+  let autoNoteAI = false;
 
   // 本地转写开跑前先说清楚两件事：
   //   1) 显存够不够 —— 本地大模型 + 动态壁纸之类的常驻程序会把 8GB 显存吃到只剩几百 MB，
@@ -1170,7 +1172,9 @@ async function doTranscribe() {
     // 再用大模型按上下文纠正音近错字 —— 你要求的「生成完做一遍自检」
     let cleaned = cleanSegments(result.segments || []);
     let cleanedBy = 'rule';
-    if (state.config.llm.enabled && cleaned.length) {
+    // 用 llmConfigured() 而不是裸的 llm.enabled：开关从 2026-11-13 起默认就是开的，
+    // 新装的人还没填 Key，光看 enabled 会每转一条都白白失败一次再弹红字。
+    if (llmConfigured() && cleaned.length) {
       try {
         await ensureLocalLLM(id);
         updateJob(id, { label: '正在用大模型校对错别字…', pct: overallPct('', 78), stage: 'notes' });
@@ -1266,11 +1270,16 @@ async function doTranscribe() {
     // 转写完了直接把笔记也写出来 —— 以前这里只是把「② 生成笔记」按钮点亮、
     // 弹一句「可点击…」，等于把最后一步又推给用户。转写要等好几分钟，
     // 人早走开了，回来还得记得再点一下，纯属多余。
-    // 自动跑的固定是**离线引擎**：0.2 秒出结果、不花 Key 的钱、不占显存，
-    // 想要更通顺的再点「AI 润色」（那个要钱或要等大模型，不能替用户决定）。
+    //
+    // 2026-11-13 起这一步改成「能走大模型就走大模型」：老大原话「离线引擎总结的
+    // 一般都不能看」，而大模型笔记开关现在默认就是开的。默认给一份不能看的笔记
+    // 再让用户自己去点「AI 润色」，等于默认体验就是残的。
+    // 只有真的能用（云端有 Key / 本地模型已部署）才走 AI，否则老老实实出离线版；
+    // AI 那次失败了也会在收尾时补一份离线版（见 autoAiFailed），不会一条笔记都没有。
     // 用函数内的局部变量记这件事，不用模块级标志位：云端转写允许多条同时跑，
     // 模块级变量会被后开的一条覆盖掉，先完成的那条笔记就丢了。
     autoNote = doc.transcript.segments.length > 0;
+    autoNoteAI = autoNote && (await llmReadyForAuto());
   } catch (e) {
     toast(`「${L.title || '未命名'}」转写失败：` + e.message, 'err', 7000);
   } finally {
@@ -1283,7 +1292,12 @@ async function doTranscribe() {
       // 笔记生成自己往后排队。doNotes 内部有 try/catch，不会出现未捕获的 rejection。
       // 传 L 过去是有意的：doNotes 靠它知道「写的是哪条录音的笔记」，
       // 不能靠 state.current —— 人可能早就切走了。
-      doNotes(false, { auto: true, lecture: { ...L, status: 'transcribed' }, id });
+      doNotes(autoNoteAI, {
+        auto: true,
+        lecture: { ...L, status: 'transcribed' },
+        id,
+        offlineFallback: autoNoteAI,
+      });
     }
     // 转写前是人家自动把本地大模型停掉腾的显存 —— 这会儿转写完了，悄悄拉回来。
     // 不拉回来的话老大想点「AI 润色」还得自己等它重启。
@@ -1339,6 +1353,39 @@ function slimAnalysis(note) {
 }
 
 /**
+ * 「大模型笔记」开关打开了，到底能不能真跑起来？
+ *
+ * 从 2026-11-13 起这个开关默认就是开的（离线引擎出的笔记老大原话「一般都不能看」），
+ * 但新装的人可能还没填 Key、本地模型也还没部署。要是不先问一句就照跑，
+ * 每转写一条都会在收尾时弹一次红字失败 —— 比默认关着更烦人。
+ *
+ * 本地端点一律返回 true：装没装由 ensureLocalLLM() 现场判（它会看 /local-llm 的
+ * configured 字段），在这里再探一次是重复的网络请求。
+ */
+function llmConfigured() {
+  const c = state.config?.llm;
+  if (!c || !c.enabled) return false;
+  if (/127\.0\.0\.1|localhost/i.test(c.baseUrl || '')) return true;
+  return !!c.hasApiKey;
+}
+
+/**
+ * 转写收尾时自动写笔记，能不能直接上大模型？
+ *
+ * 比 llmConfigured() 多一层：本地模型还要确认「真的部署过」。
+ * 本地端点如果只是配置里写着 127.0.0.1:8080 但从来没装过模型，
+ * ensureLocalLLM() 会一路等到 45 秒超时才返回 false，那 45 秒里
+ * 进度栏一直挂着「正在调用大模型」—— 用户只能干等，比直接出离线版难受得多。
+ * 所以先花一次 GET /local-llm 问清楚（毫秒级），部署过才走 AI。
+ */
+async function llmReadyForAuto() {
+  if (!llmConfigured()) return false;
+  if (!/127\.0\.0\.1|localhost/i.test(state.config.llm.baseUrl || '')) return true;
+  const info = await api('/local-llm').catch(() => null);
+  return !!info?.configured;
+}
+
+/**
  * 生成笔记。
  *
  * @param {boolean} useAI true = 走大模型（「AI 润色」），false = 离线引擎
@@ -1374,12 +1421,20 @@ async function doNotes(useAI = false, opts = {}) {
     if (auto) return;
     return toast(mine.kind === 'transcribe' ? '这条录音正在转写，请等它完成' : '这条录音正在生成笔记', '', 4000);
   }
-  if (useAI && !state.config.llm.enabled) {
-    toast('尚未启用大模型笔记，请在设置中填写接口与 Key', 'err', 5000);
+  if (useAI && !llmConfigured()) {
+    toast(
+      state.config.llm.enabled
+        ? '大模型笔记还差一步：设置 → ② AI 润色 里填好 Key（本地模型要先部署）'
+        : '尚未启用大模型笔记，请在设置中填写接口与 Key',
+      'err',
+      5000
+    );
     openSettings();
     return;
   }
   const job = startJob(id, 'notes', { title: L.title || '未命名', label: '正在分析逐字稿…', pct: overallPct('', 8), stage: 'notes' });
+  // AI 这条失败时的兜底文案。非空就等于「收尾时还要再跑一次离线版」。
+  let fallbackToOffline = '';
   try {
     await new Promise((r) => setTimeout(r, 30));
     const meta = {
@@ -1439,19 +1494,33 @@ async function doNotes(useAI = false, opts = {}) {
       renderNote();
     }
     await loadLectures();
-    // 自动那一次换个说法：不让人以为「我刚才没点，怎么冒出笔记了」
+    // 自动那一次换个说法：不让人以为「我刚才没点，怎么冒出笔记了」。
+    // 自动走 AI 那次的文案要单独说：不然「AI 润色已生成」冒出来，人根本没点过，
+    // 会以为软件自己乱花钱调接口。
     toast(
-      `「${L.title || '未命名'}」` + (useAI ? 'AI 润色已生成' : auto ? '笔记已自动生成' : '笔记已生成'),
+      `「${L.title || '未命名'}」` +
+        (useAI ? (auto ? '笔记已自动生成（AI 润色）' : 'AI 润色已生成') : auto ? '笔记已自动生成' : '笔记已生成'),
       'ok'
     );
   } catch (e) {
     // 自动那一次失败不喊得太凶（用户根本没触发它），但也不能装作成功 —— 提示还是要给
     const ttl = auto ? 4000 : 7000;
     if (String(e.message).includes('取消')) toast(`「${L.title || '未命名'}」已取消`, '');
-    else toast(`「${L.title || '未命名'}」` + (auto ? '自动生成笔记失败：' : '生成笔记失败：') + e.message, 'err', ttl);
+    else {
+      // 自动那次本来是想给一份 AI 笔记，失败了不能让人打开一看空空如也 ——
+      // 标记一下，收尾时补一份离线版（消息真实、也不至于没东西看）。
+      if (useAI && opts.offlineFallback) fallbackToOffline = `AI 润色没成功（${e.message}），先给你离线版`;
+      toast(`「${L.title || '未命名'}」` + (auto ? '自动生成笔记失败：' : '生成笔记失败：') + e.message, 'err', ttl);
+    }
   } finally {
     endJob(id);
     if (state.current?.lecture?.id === id) $('btn-notes').classList.remove('primary');
+    // 离线兜底必须在 endJob 之后：doNotes 会争同一个任务槽（见转写收尾那段注释）。
+    // 这里不再传 offlineFallback，避免 AI 又失败又兜底、来回打转。
+    if (fallbackToOffline) {
+      toast(`「${L.title || '未命名'}」` + fallbackToOffline, '', 6000);
+      doNotes(false, { auto: true, lecture: L, id });
+    }
   }
 }
 
@@ -1538,7 +1607,7 @@ function openNewLecture(opts = {}) {
   $('new-lecture-title').textContent = prefs ? '笔记设置' : '新建录音';
   $('btn-nl-create').textContent = prefs ? '保存' : '创建';
   $('nl-hint').textContent = prefs
-    ? '改完点保存。已经生成过的笔记不会自动重写 —— 想按新风格重做，保存后再点一次「重新生成笔记」或者「AI 润色」。'
+    ? '改完点保存。已经生成过的笔记不会自动重写 —— 想按新风格重做，保存后再点一次「AI 润色」。'
     : '风格、重点条数、提示词都只对这条录音生效。以后想改，打开它点「笔记设置」。';
 
   // 改已有录音时把上次的选择填回去；新建时一律重置成「跟全局一样」，
@@ -1721,7 +1790,7 @@ async function editNotePrefs(id) {
     renderList();
     // 只改偏好不动已有笔记，所以得告诉人下一步该按哪个按钮 ——
     // 否则改完风格回来看笔记没变，会以为没保存成功。
-    toast((isCurrent ? '笔记设置已保存' : `「${pick.title}」的笔记设置已保存`) + '，点「重新生成笔记」按新设置重做', 'ok', 6000);
+    toast((isCurrent ? '笔记设置已保存' : `「${pick.title}」的笔记设置已保存`) + '，点「AI 润色」按新设置重做', 'ok', 6000);
   } catch (e) {
     toast('保存失败：' + e.message, 'err');
   }

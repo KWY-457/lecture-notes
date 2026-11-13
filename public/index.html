@@ -164,8 +164,8 @@
           <span class="tb-hint" id="transcribe-hint"></span>
         </div>
         <div class="tb-group">
-          <button class="btn ghost" id="btn-notes" title="转写完成后笔记会自动生成；想按新设置重做时点这里">重新生成笔记</button>
-          <button class="btn ghost" id="btn-notes-ai" title="用大模型把口语润色成书面笔记">AI 润色</button>
+          <button class="btn ghost" id="btn-notes" title="用离线引擎重做一份：不联网、不花钱，句子是老师原话">离线重做</button>
+          <button class="btn ghost" id="btn-notes-ai" title="转写完成后会自动润色；想重做或改风格后重来点这里">AI 润色</button>
         </div>
         <div class="tb-group">
           <button class="btn ghost" id="btn-export-docx">导出 Word</button>
@@ -396,7 +396,6 @@
 
       <section class="sect">
         <h4>② AI 润色（可选）</h4>
-        <p class="hint">不启用也能用：默认的离线引擎会在本地挑重点。启用后，「AI 润色」能把口语整理得更通顺、结构更像复习资料。服务商和 Key 用上面①选的同一家。</p>
         <label class="check"><input type="checkbox" id="s-llm-enabled"> 启用大模型笔记</label>
         <div class="field">
           <label>笔记模型 <span class="hint" id="llm-model-now"></span></label>

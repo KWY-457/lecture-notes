@@ -290,7 +290,11 @@ const DEFAULT_CONFIG = {
     denoise: true, // 转写前跑抗噪（谱减 + 噪声底追踪 + VAD 门限 + 工频陷波）
   },
   llm: {
-    enabled: false,
+    // 默认就打开。离线引擎出的笔记老大原话「一般都不能看」，把开关默认关着，
+    // 等于默认给人一份不能看的笔记，还得自己去设置里发现「原来还有个开关」。
+    // 打开不等于真的会用：没填 Key / 没装本地模型时前端 llmUsable() 会拦住，
+    // 不会每转写一条就白等一轮再报错。
+    enabled: true,
     /** 服务商 id（public/providers.js 里的 id），界面下拉选中后会自动填 baseUrl 与 model */
     provider: 'local',
     baseUrl: 'http://127.0.0.1:8080/v1',

@@ -367,26 +367,27 @@ if (lecture) {
     doc.getElementById('engine-tag').textContent
   );
 
-  /* --- 工具栏两个笔记按钮（2026-10-24：改名 + 自动生成） ---
-   * 「② 生成笔记」→「重新生成笔记」：转写完笔记已经自动出来了，这个按钮只剩
-   * 「想按新设置重做一份」这一个用途，带序号反而暗示「必须点」。
+  /* --- 工具栏两个笔记按钮 ---
+   * 演变：② 生成笔记 → 重新生成笔记（2026-10-24，笔记改成自动生成后）→ 离线重做
+   * （2026-11-13，自动那步改成直接走 AI 润色，离线只剩「手动兜底重做」这一个用途）。
    * 「AI 版笔记」→「AI 润色」：老大说这个名字更好懂 —— 它干的就是把口语润色成书面。
    */
   const btnNotes = doc.getElementById('btn-notes');
   const btnNotesAi = doc.getElementById('btn-notes-ai');
-  check('有「重新生成笔记」按钮', !!btnNotes, btnNotes ? btnNotes.textContent : '不存在');
-  check('「② 生成笔记」已改名「重新生成笔记」', (btnNotes?.textContent || '').includes('重新生成'), btnNotes?.textContent);
+  check('有「离线重做」按钮', !!btnNotes, btnNotes ? btnNotes.textContent : '不存在');
+  check('按钮已改名「离线重做」（自动那步现在是 AI）', (btnNotes?.textContent || '').includes('离线'), btnNotes?.textContent);
   check('「AI 版笔记」已改名「AI 润色」', (btnNotesAi?.textContent || '').includes('AI 润色'), btnNotesAi?.textContent);
   check('工具栏两个按钮都不再带②', !/②/.test((btnNotes?.textContent || '') + (btnNotesAi?.textContent || '')), '');
 
-  /* --- 转写完成会自动补一篇离线笔记（2026-10-24） ---
-   * 这里读源码断言：真的调用了 doNotes(false, {auto:true}) 那条路径。
+  /* --- 转写完成会自动补一篇笔记（2026-10-24，2026-11-13 改成优先大模型） ---
+   * 这里读源码断言：真的调用了 doNotes(...) 那条路径。
    * 不真跑转写 —— 那要几分钟的 Whisper，dom-app-test 是几秒级的冒烟测试。
    */
   const appSrc = fs.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const serverSrc = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
   check(
     '转写收尾会自动生成笔记',
-    /doNotes\(false,\s*\{\s*auto:\s*true/.test(appSrc),
+    /doNotes\(autoNoteAI,\s*\{\s*auto:\s*true/.test(appSrc),
     ''
   );
   check(
@@ -397,6 +398,31 @@ if (lecture) {
   check(
     '自动生成排在 endJob 之后（否则会被自己的任务槽挡住）',
     /endJob\(id\);[\s\S]{0,400}if\s*\(autoNote\)/.test(appSrc),
+    ''
+  );
+  check(
+    '自动那次能用大模型就走大模型（不是固定离线）',
+    /autoNoteAI\s*=\s*autoNote\s*&&\s*\(await\s+llmReadyForAuto\(\)\)/.test(appSrc),
+    ''
+  );
+  check(
+    'AI 自动那次失败会补一份离线版（不能留空）',
+    /offlineFallback:\s*autoNoteAI/.test(appSrc) &&
+      /fallbackToOffline\s*=\s*`AI 润色没成功/.test(appSrc) &&
+      /if\s*\(fallbackToOffline\)\s*\{[\s\S]{0,300}doNotes\(false,/.test(appSrc),
+    ''
+  );
+  check(
+    '大模型笔记开关默认是开的',
+    /llm:\s*\{\s*[\s\S]{0,400}?enabled:\s*true,/.test(serverSrc),
+    ''
+  );
+
+  /* --- ② AI 润色那节不再有「不启用也能用…」那段解释（2026-11-13） --- */
+  const htmlSrc = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  check(
+    '② 节解释文案已删',
+    !/不启用也能用：默认的离线引擎会在本地挑重点/.test(htmlSrc),
     ''
   );
 
