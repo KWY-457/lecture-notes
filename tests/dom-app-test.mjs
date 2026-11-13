@@ -367,19 +367,22 @@ if (lecture) {
     doc.getElementById('engine-tag').textContent
   );
 
-  /* --- 工具栏两个笔记按钮 ---
-   * 演变：② 生成笔记 → 重新生成笔记（2026-10-24，笔记改成自动生成后）→ 离线重做
-   * （2026-11-13，自动那步改成直接走 AI 润色，离线只剩「手动兜底重做」这一个用途）。
-   * 「AI 版笔记」→「AI 润色」：老大说这个名字更好懂 —— 它干的就是把口语润色成书面。
+  /* --- 工具栏的笔记按钮 ---
+   * 演变：② 生成笔记 → 重新生成笔记（2026-10-24）→ 离线重做 + AI 润色（2026-11-13 上午）
+   * → 重新润色（2026-11-13 晚上）。
+   *
+   * 最后这一次是老大拍的：「那把离线重做和 AI 润色这两个按钮删掉，添加一个重新润色，
+   * 这样离线引擎就彻底用不上了，可以除掉」。从此离线引擎不再产出笔记，
+   * 只剩一个入口：让大模型重来一遍。
    */
-  const btnNotes = doc.getElementById('btn-notes');
-  const btnNotesAi = doc.getElementById('btn-notes-ai');
-  check('有「离线重做」按钮', !!btnNotes, btnNotes ? btnNotes.textContent : '不存在');
-  check('按钮已改名「离线重做」（自动那步现在是 AI）', (btnNotes?.textContent || '').includes('离线'), btnNotes?.textContent);
-  check('「AI 版笔记」已改名「AI 润色」', (btnNotesAi?.textContent || '').includes('AI 润色'), btnNotesAi?.textContent);
-  check('工具栏两个按钮都不再带②', !/②/.test((btnNotes?.textContent || '') + (btnNotesAi?.textContent || '')), '');
+  const btnRenote = doc.getElementById('btn-renote');
+  check('有「重新润色」按钮', !!btnRenote, btnRenote ? btnRenote.textContent : '不存在');
+  check('按钮文案就是「重新润色」', (btnRenote?.textContent || '').trim() === '重新润色', btnRenote?.textContent);
+  check('旧的「离线重做」按钮已删除', doc.getElementById('btn-notes') === null, '');
+  check('旧的「AI 润色」按钮已删除', doc.getElementById('btn-notes-ai') === null, '');
+  check('按钮不再带序号②', !/②/.test(btnRenote?.textContent || ''), '');
 
-  /* --- 转写完成会自动补一篇笔记（2026-10-24，2026-11-13 改成优先大模型） ---
+  /* --- 转写完成会自动润色一篇笔记（2026-10-24 自动生成，2026-11-13 只剩大模型这一条路） ---
    * 这里读源码断言：真的调用了 doNotes(...) 那条路径。
    * 不真跑转写 —— 那要几分钟的 Whisper，dom-app-test 是几秒级的冒烟测试。
    */
@@ -387,7 +390,7 @@ if (lecture) {
   const serverSrc = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
   check(
     '转写收尾会自动生成笔记',
-    /doNotes\(autoNoteAI,\s*\{\s*auto:\s*true/.test(appSrc),
+    /doNotes\(\{\s*auto:\s*true/.test(appSrc),
     ''
   );
   check(
@@ -401,30 +404,34 @@ if (lecture) {
     ''
   );
   check(
-    '自动那次能用大模型就走大模型（不是固定离线）',
-    /autoNoteAI\s*=\s*autoNote\s*&&\s*\(await\s+llmReadyForAuto\(\)\)/.test(appSrc),
+    '自动那次先问一句「真能跑吗」（没配 Key / 本地没部署就安静跳过）',
+    /if\s*\(auto\)\s*\{[\s\S]{0,400}llmReadyForAuto\(\)/.test(appSrc),
     ''
   );
-  check(
-    'AI 自动那次失败会补一份离线版（不能留空）',
-    /offlineFallback:\s*autoNoteAI/.test(appSrc) &&
-      /fallbackToOffline\s*=\s*`AI 润色没成功/.test(appSrc) &&
-      /if\s*\(fallbackToOffline\)\s*\{[\s\S]{0,300}doNotes\(false,/.test(appSrc),
-    ''
-  );
+  /* 反向断言：离线兜底整条路已经拆掉了。
+   * 留着的害处是「看着有笔记其实没润色」—— 老大拍板说不要这种假保险。 */
+  check('没有离线兜底这回事了（fallbackToOffline 已删）', !/fallbackToOffline/.test(appSrc), '');
+  check('不再给 doNotes 传 offlineFallback', !/offlineFallback/.test(appSrc), '');
+  check('自动那步不再先算一遍离线版（autoNoteAI 已删）', !/autoNoteAI/.test(appSrc), '');
+  check('doNotes 只剩一个参数（没有 useAI 开关了）', /function doNotes\(opts\s*=\s*\{\}\)/.test(appSrc), '');
   check(
     '大模型笔记开关默认是开的',
     /llm:\s*\{\s*[\s\S]{0,400}?enabled:\s*true,/.test(serverSrc),
     ''
   );
+  check('服务端不再重建离线笔记', !/rebuildOfflineNote/.test(serverSrc), '');
+  check('服务端不再 import analyze', !/import\s*\{\s*analyze\s*\}\s*from\s*'\.\/public\/summarize\.js'/.test(serverSrc), '');
 
-  /* --- ② AI 润色那节不再有「不启用也能用…」那段解释（2026-11-13） --- */
+  /* --- ② 笔记润色那节：解释文案已删、节名不再叫「AI 润色（可选）」 --- */
   const htmlSrc = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   check(
     '② 节解释文案已删',
     !/不启用也能用：默认的离线引擎会在本地挑重点/.test(htmlSrc),
     ''
   );
+  check('② 节标题改成「笔记润色」', /<h4>② 笔记润色<\/h4>/.test(htmlSrc), '');
+  check('复选框说清是「转写完成后自动润色」', /转写完成后自动润色笔记/.test(htmlSrc), '');
+  check('index.html 里没有残留的旧按钮 id', !/btn-notes/.test(htmlSrc), '');
 
   /* --- 思维导图视图 --- */
   doc.getElementById('tab-mindmap').onclick();

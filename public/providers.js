@@ -105,7 +105,7 @@ export const PROVIDERS = [
     //   不限制 → 810~822 秒（思考 50157 字），而 Node 内置 fetch 有 300 秒
     //            headersTimeout 硬墙 → 界面永远只看到「fetch failed」；
     //   加 low  → 160 秒，思考 0 字，产出 6995 字（69 条要点 / 21 个标题）。
-    // 换句话说：不改这个，GLM-5.3-Flash 在「AI 润色」上是**只能失败**的。
+    // 换句话说：不改这个，GLM-5.3-Flash 在「笔记润色」上是**只能失败**的。
     models: [
       {
         id: 'Qwen/Qwen2.5-7B-Instruct',
@@ -336,7 +336,7 @@ export const PROVIDERS = [
     // 笔记走本机 llama-server（helpers/setup-local-llm.ps1 一键部署）
     baseUrl: 'http://127.0.0.1:8080/v1',
     apiKeyHint: '本地服务不用填',
-    // ★ 2026-11-05 实测两档（老大 m29315：AI 润色的模型也别就一个）
+    // ★ 2026-11-05 实测两档（老大 m29315：润色的模型也别就一个）
     //
     // 测法：录音「工程制图」(62b4f73d) 的前 5997 字逐字稿，同一段材料、同一套
     // 启动参数（-c 16384 -ngl 99 -ctk q8_0 -ctv q8_0 -t 8 --jinja），

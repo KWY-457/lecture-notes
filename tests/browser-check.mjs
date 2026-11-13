@@ -243,7 +243,7 @@ check('笔记含自测题', D.noteHasQuiz === true);
 check('笔记含可点时间戳', D.tsLinks >= 5, `tsLinks=${D.tsLinks}`);
 check('逐字稿折叠块存在', D.detailsEl >= 1, `details=${D.detailsEl}`);
 check('引擎标签显示', D.engineTag.length > 0, D.engineTag);
-check('笔记来源标记', /离线|AI 生成/.test(D.noteSource), D.noteSource);
+check('笔记来源标记', /大模型润色|旧版离线笔记/.test(D.noteSource), D.noteSource);
 
 /** 音频元数据要等 loadedmetadata，单独取 */
 const audio = await cdp.eval(

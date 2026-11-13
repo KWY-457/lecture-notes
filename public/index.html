@@ -164,8 +164,7 @@
           <span class="tb-hint" id="transcribe-hint"></span>
         </div>
         <div class="tb-group">
-          <button class="btn ghost" id="btn-notes" title="用离线引擎重做一份：不联网、不花钱，句子是老师原话">离线重做</button>
-          <button class="btn ghost" id="btn-notes-ai" title="转写完成后会自动润色；想重做或改风格后重来点这里">AI 润色</button>
+          <button class="btn ghost" id="btn-renote" title="用大模型重新整理一遍：转写完成后会自动跑，改过风格或想重来点这里">重新润色</button>
         </div>
         <div class="tb-group">
           <button class="btn ghost" id="btn-export-docx">导出 Word</button>
@@ -395,8 +394,8 @@
       </section>
 
       <section class="sect">
-        <h4>② AI 润色（可选）</h4>
-        <label class="check"><input type="checkbox" id="s-llm-enabled"> 启用大模型笔记</label>
+        <h4>② 笔记润色</h4>
+        <label class="check"><input type="checkbox" id="s-llm-enabled"> 转写完成后自动润色笔记</label>
         <div class="field">
           <label>笔记模型 <span class="hint" id="llm-model-now"></span></label>
           <div class="model-list" id="llm-model-list"></div>

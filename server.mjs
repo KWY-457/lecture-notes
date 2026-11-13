@@ -40,9 +40,8 @@ import { normalizeTranscript } from './public/transcript.js';
 // 前后端共用同一份实现，落盘时服务端再洗一遍 —— 见 writeDoc 里的注释。
 import { cleanSegments } from './public/cleanup.js';
 // 笔记的血统判断（哪版算法、对哪份逐字稿算的）也只写一份。
-// 过时的离线笔记服务端会自己重建 —— 笔记本来就是逐字稿的确定性函数。
+// 2026-11-13 起服务端不再重建离线笔记，所以这里也不再需要 analyze()。
 import { noteStatus, stampNote, normalizeNote, transcriptFingerprint } from './public/note.js';
-import { analyze } from './public/summarize.js';
 // 自动更新：版本比较 / 清单解析 / 下载源排序只写一份，前端与测试共用同一套判断。
 // 这里面一个网络请求、一次文件操作都没有 —— 纯函数才好测。
 import {
@@ -1085,13 +1084,12 @@ async function writeDoc(id, kind, data) {
 /**
  * 读笔记，顺手判断「这份笔记还配不配当前的逐字稿和算法」。
  *
- * 过时的**离线**笔记直接在这里重建 —— 它是逐字稿的确定性函数，
- * 重算不联网、不花钱、一个字的原文都不会改，用户要的就是最新最好的样子。
- * 过时的 **AI** 笔记不动（那是模型花钱写的），只把状态回给前端，让用户自己决定。
+ * 2026-11-13 起这里**不再自动重建任何笔记**。以前离线笔记过时会在读的时候重算一份
+ * （逐字稿的确定性函数，不花钱），但离线引擎已经退出产品了 —— 它产出的稿子老大原话
+ * 「一般都不能看」。现在过时就只把状态回给前端，让用户点「重新润色」走大模型。
  *
- * 为什么放在读路径而不是写路径：
- *   算法升级、逐字稿自愈补回漏掉的句子 —— 这些事发生时根本没有「写笔记」这个动作。
- *   只有读的时候才可能发现「这条笔记已经跟不上原文了」。
+ * 为什么要留状态判断：算法升级、逐字稿自愈补回漏掉的句子 —— 这些事发生时根本没有
+ * 「写笔记」这个动作，只有读的时候才可能发现「这条笔记已经跟不上原文了」。
  */
 async function readNote(id, preloaded) {
   const [rawNote, transcript, meta] = await Promise.all([
@@ -1105,51 +1103,9 @@ async function readNote(id, preloaded) {
   const { note, repairs } = normalizeNote(rawNote);
   if (repairs.length) writeDoc(id, 'note', note).catch(() => {});
 
-  const fingerprint = transcriptFingerprint(transcript);
-  const status = noteStatus(note, { fingerprint });
-  if (status.missing) return { note: null, status };
-  if (!status.stale) return { note, status };
-
-  if (!status.canAutoRebuild) {
-    // AI 笔记过时：原样返回，附上原因让界面提示「可重建」
-    return { note, status };
-  }
-
-  try {
-    const rebuilt = rebuildOfflineNote(transcript, meta);
-    if (!rebuilt) return { note, status };
-    const saved = await writeDoc(id, 'note', rebuilt);
-    return {
-      note: saved,
-      status: { ...status, stale: false, rebuilt: true },
-    };
-  } catch {
-    // 重建失败不能让笔记打不开，退回旧笔记 + 过时提示
-    return { note, status };
-  }
-}
-
-/**
- * 用当前算法把逐字稿重算成一份离线笔记。
- * 这是服务端**唯一**调用 analyze() 的地方，前端「生成笔记」走的也是同一套算法。
- */
-function rebuildOfflineNote(transcript, meta) {
-  const segments = Array.isArray(transcript?.segments) ? transcript.segments : [];
-  if (!segments.length) return null;
-  const analysis = analyze({ segments, meta: meta || {} });
-  // analyze() 的返回值里 sentences（133KB）、transcriptText（27KB）、markdown（89KB）
-  // 是**渲染用的中间产物**，渲染完就没用了 —— 前端 doNotes 里的 slimAnalysis() 也是这么剔的。
-  // 不剔的话每条笔记的 note.json 会大 5 倍，而这几个字段从没被任何读取方用过
-  // （前端只读 note.markdown 和 note.data.outline / note.data.title）。
-  const { sentences, transcriptText, markdown, ...slim } = analysis;
-  const doc = {
-    markdown: analysis.markdown,
-    data: slim,
-    mode: 'offline',
-    model: '',
-    createdAt: new Date().toISOString(),
-  };
-  return stampNote(doc, { fingerprint: transcriptFingerprint(transcript), mode: 'offline' });
+  const status = noteStatus(note, { fingerprint: transcriptFingerprint(transcript) });
+  void meta; // 以前重建离线笔记要用它，现在不重建了，留着参数是为了调用方不用改
+  return { note: status.missing ? null : note, status };
 }
 
 /* --------------------------------- 静态 ---------------------------------- */
@@ -2431,7 +2387,7 @@ async function handleApi(req, res, u) {
        * 请求里的 model 字段（实测：随便写个名字也回 200，永远给启动时
        * -m 那个）。所以「换模型」在物理上就等于「换进程」。
        *
-       * 停机→启动之间有 2~5 秒空档（取决于模型多大），期间 AI 润色会连不上。
+       * 停机→启动之间有 2~5 秒空档（取决于模型多大），期间润色会连不上。
        * 这比悄悄失败强：前端拿到 starting:true 就提示「正在重启」，
        * 而不是让用户点一次润色、等 30 秒、然后看见「连接被拒绝」。
        */
@@ -2504,7 +2460,7 @@ async function handleApi(req, res, u) {
    * 一键部署本地大模型：把 helpers\setup-local-llm.ps1 跑起来。
    *
    * 为什么让服务端代跑、而不是让用户自己去文件管理器找脚本：
-   * 「AI 润色要额外装个东西」这件事本身就够劝退了，
+   * 「笔记润色要额外装个东西」这件事本身就够劝退了，
    * 再让他打开 PowerShell 敲路径，十个人里有九个会放弃。
    *
    * 部署脚本会下载约 4.4GB，所以要立刻返回、别把请求挂住；
@@ -2741,23 +2697,22 @@ async function handleApi(req, res, u) {
       }
       if (req.method === 'PUT') {
         const body = await readJsonBody(req, 32 * 1024 * 1024);
-        // 生成笔记也算「软件在干活」，和转写同一个门槛。
-        // 但注意只拦「新建」：已经存着的笔记增删改查都放行，
-        // 不然用户连自己写的东西都保存不了。
-        if (String(body.markdown || '').trim()) {
-        }
         // 写入前盖章：记下「这是哪版算法、对哪份逐字稿算的」。
         // 没有这行，以后算法升级时就分不清哪些笔记已经过时了。
         const tr = await readDoc(id, 'transcript');
+        // mode 默认值从 'offline' 改成 'llm'：2026-11-13 起界面只有大模型润色这一条路，
+        // 没带 mode 的写入（老脚本、手工 POST）不该被当成离线笔记 —— 那会让它在界面上
+        // 显示成「旧版离线笔记」，而 0.9 之后根本不会再产生离线笔记。
+        const mode = body.mode || 'llm';
         const doc = stampNote(
           {
             markdown: String(body.markdown || ''),
             data: body.data || null,
-            mode: body.mode || 'offline',
+            mode,
             model: body.model || '',
             createdAt: body.createdAt || new Date().toISOString(),
           },
-          { fingerprint: transcriptFingerprint(tr), mode: body.mode || 'offline' }
+          { fingerprint: transcriptFingerprint(tr), mode }
         );
         await writeDoc(id, 'note', doc);
         // 连状态一起回：前端拿 note 却不更新 noteStatus，会继续显示「还没有笔记」，

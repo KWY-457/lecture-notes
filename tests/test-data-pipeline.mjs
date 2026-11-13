@@ -105,10 +105,11 @@ console.log('\n=== 3. 笔记能判断自己是否过时 ===');
 
   const s2 = noteStatus(fresh, { fingerprint: 'changed-forever' });
   check('逐字稿变了 → 判为过时', s2.stale === true);
-  check('离线笔记允许自动重建', s2.canAutoRebuild === true);
-
-  const ai = { ...fresh, mode: 'llm' };
-  check('AI 笔记不许自动重建（要花用户的钱）', noteStatus(ai, { fingerprint: 'changed-forever' }).canAutoRebuild === false);
+  // 2026-11-13 起没有任何笔记能自动重建（离线引擎退出产品，重建一律走大模型要花钱），
+  // 所以 canAutoRebuild 字段整个删掉了。这里反过来断言它不存在 ——
+  // 万一哪天有人手滑加回来，服务端又会偷偷替用户烧 Key。
+  check('不再提供「自动重建」这个许可位', s2.canAutoRebuild === undefined, String(s2.canAutoRebuild));
+  check('过时原因照旧给人话', s2.reason === '逐字稿已更新', s2.reason);
 
   const old = { ...fresh, noteVersion: NOTE_SCHEMA_VERSION - 1 };
   check('低版本笔记 → 判为过时', noteStatus(old, { fingerprint: fp }).stale === true);

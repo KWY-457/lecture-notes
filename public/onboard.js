@@ -514,7 +514,7 @@ export function createOnboard({ state, onDone, onQuit }) {
     if (!llmList.length) llmList = modelsFor(asrProvider, 'llm');
     parts.push(
       el('div', { class: 'onboard-models' },
-        el('h4', { text: 'AI 润色模型' },
+        el('h4', { text: '笔记润色模型' },
           el('span', { class: 'hint', text: '（把逐字稿整理成笔记，可留空以后再说）' })
         ),
         el('div', { class: 'model-list' }, ...llmList.map((m) => modelCard(m, asrProvider, 'llm', () => {

@@ -10,10 +10,11 @@
  * 现在的规矩：
  *   1. 每条笔记都记下**它是用哪版算法、对哪份逐字稿**算出来的（noteVersion
  *      + sourceHash）。版本或原文一变，就说明笔记过时了。
- *   2. 离线笔记（mode !== 'llm'）过时后可以**自动重建** —— 它本来就是
- *      逐字稿的确定性函数，重算不需要联网、不花钱、不改一个字的原文。
- *   3. AI 笔记（mode === 'llm'）过时后**不自动重建** —— 那是模型读过原文写的，
- *      重算会花用户的钱，也可能丢掉模型改对的专名。只在界面上提示「可重建」。
+ *   2. 过时的笔记一律**不自动重建**（2026-11-13 起）：离线引擎不再产出笔记，
+ *      唯一的来源是大模型，重算要花用户的钱、也可能丢掉模型改对的专名。
+ *      所以只在界面上提示「可重建」，让用户自己点「重新润色」。
+ *   3. 老磁盘上的离线笔记（mode !== 'llm'）仍然能读能导出 —— 只是标成
+ *      「旧版离线笔记」，不会再被重算成新的一份。
  *   4. **正文里的提示词残留必须在入口就洗掉**（stripPromptLeaks）。
  *      以前只在渲染时滤，磁盘上一直是脏的：导出 Word、导出 md、
  *      复制笔记、思维导图全都会把「［40 字以内，说清这节课的主线。］」带出去。
@@ -66,35 +67,40 @@ export function transcriptFingerprint(transcript) {
  *
  * @param {object|null} note 读出来的 note.json
  * @param {{fingerprint?:string}} ctx 当前逐字稿的指纹
- * @returns {{stale:boolean, reason:string, canAutoRebuild:boolean}}
- *   stale            —— 需要重建
+ * @returns {{stale:boolean, reason:string, missing?:boolean}}
+ *   stale            —— 需要重建（界面会提示点「重新润色」）
  *   reason           —— 人话说明为什么（写进界面提示）
- *   canAutoRebuild   —— 离线笔记才能自动重建；AI 笔记要问用户
+ *   missing          —— 压根还没有笔记
+ *
+ * 2026-11-13 起没有 canAutoRebuild 了：服务端不再重建任何笔记，
+ * 唯一的来源是大模型，重建要花用户的钱，必须由用户自己点。
+ * 老的调用方如果还读 canAutoRebuild，会拿到 undefined（falsy），
+ * 行为等同「不许自动重建」—— 正是想要的。
  */
 export function noteStatus(note, ctx = {}) {
   const n = note && typeof note === 'object' ? note : null;
   if (!n || !n.markdown) {
-    return { stale: true, reason: '还没有笔记', canAutoRebuild: true, missing: true };
+    return { stale: true, reason: '还没有笔记', missing: true };
   }
-  const canAutoRebuild = n.mode !== 'llm';
   const ver = Number(n.noteVersion) || 0;
   const want = ctx.fingerprint || '';
   const got = String(n.sourceHash || '');
 
   // 逐字稿换了（重新转写过、或补回了漏掉的句子）→ 笔记里的时间戳会指错地方
   if (want && got && got !== want) {
-    return { stale: true, reason: '逐字稿已更新', canAutoRebuild };
+    return { stale: true, reason: '逐字稿已更新' };
   }
   // 算法升级过 → 旧笔记可能是碎片主题。
   // 对用户只说「整理方式升级了」，不暴露 v1/v2 这种内部版本号。
   if (ver < NOTE_SCHEMA_VERSION) {
-    return { stale: true, reason: '整理方式已升级', canAutoRebuild };
+    return { stale: true, reason: '整理方式已升级' };
   }
-  // 老笔记没存指纹：只要不是 AI 写的，就重建一次把指纹补上
-  if (!got && canAutoRebuild) {
-    return { stale: true, reason: '补一下原文校验', canAutoRebuild };
+  // 老笔记没存指纹（0.7 以前写的）：提示一次「补一下原文校验」，
+  // 用户点「重新润色」就能补上。以前这里会自己重算，现在不做了。
+  if (!got) {
+    return { stale: true, reason: '补一下原文校验' };
   }
-  return { stale: false, reason: '', canAutoRebuild };
+  return { stale: false, reason: '' };
 }
 
 /**
