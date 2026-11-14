@@ -3203,7 +3203,7 @@ console.log('');
 for (const u of urls) console.log('   ▸ 在浏览器打开： ' + u);
 if (HOST === '0.0.0.0') {
   console.log('');
-  console.log('   手机与电脑连同一个 Wi-Fi 后，用手机浏览器打开上面的局域网地址，');
+  console.log('   同一 Wi-Fi 下用手机浏览器打开上面的局域网地址，');
   console.log('   即可把手机里的录音直接上传到电脑处理。');
   console.log('   （地址里那串字母是这台电脑的专属钥匙，别发给不相关的人 ——');
   console.log('     谁拿到它就能访问这里的录音。）');

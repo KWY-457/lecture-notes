@@ -259,7 +259,7 @@ function syncToolbar() {
     tb.title = '「' + (blocked.title || '另一条录音') + '」正在本地转写，显卡同一时间只能转一条';
   } else if (done) {
     tb.textContent = '重新转写';
-    tb.title = '这条录音已经转写过了；点这里是重转一遍（会在原逐字稿上覆盖）';
+    tb.title = '已经转写过；点这里重转一遍，会覆盖原逐字稿';
   } else {
     tb.textContent = '① 开始转写';
     tb.title = '把这条录音转成逐字稿';
@@ -685,7 +685,7 @@ function renderTranscript() {
   } else {
     note.hidden = false;
     note.textContent =
-      '本次转写由云端服务商提供，它只返回整段文字、不提供逐句时间戳，所以左侧时间一律显示 00:00，点击无法定位回听。需要按时间回听，请改用本地模型（large-v3-turbo）重新转写。';
+      '云端服务商只返回整段文字、不给逐句时间戳，所以左侧时间都显示 00:00，点击不能回听。想按时间回听，改用本地模型重新转写。';
   }
   const q = ($('tx-search').value || '').trim();
   segs.forEach((s, i) => {
@@ -888,7 +888,7 @@ function renderNote() {
   const host = $('note-view');
   const note = state.current?.note;
   if (!note?.markdown) {
-    host.innerHTML = '<p class="placeholder">还没有笔记。先点「① 开始转写」，转写完成后笔记会自动生成。</p>';
+    host.innerHTML = '<p class="placeholder">还没有笔记。点「① 开始转写」。</p>';
     $('note-source').textContent = '';
     return;
   }
@@ -905,7 +905,7 @@ function renderNote() {
   }
   if (state.view === 'mindmap') {
     host.innerHTML = renderMindMapView(note);
-    $('note-source').textContent = '思维导图（主题 + 关键词，点时间可跳转）';
+    $('note-source').textContent = '思维导图：主题 + 关键词，点时间可跳转';
     // 导图里的时间徽标点一下就跳过去（以前只写了 cursor:pointer，没绑事件）
     host.querySelectorAll('.mm-t').forEach((b) => {
       b.onclick = (e) => {
@@ -974,7 +974,7 @@ async function freeVramForTranscribe(gpu, jobId) {
     stage: '',
     detail: '',
   });
-  toast(`显存不足，已自动停止本地大模型（转写完成后自动恢复）`, 'ok', 4000);
+  toast(`显存不足，已自动停止本地大模型，转写完会自动恢复`, 'ok', 4000);
   await api('/local-llm', { method: 'POST', body: { action: 'stop' } }).catch(() => {});
   // taskkill 之后显存是慢慢放的，等它涨上来；每 500ms 看一次，最多 15 秒
   let after = gpu;
@@ -1095,11 +1095,11 @@ async function doTranscribe() {
         label: `云端转写中，已等待 ${mmss}`,
         pct: undefined,
         stage: 'cloud',
-        detail: '服务商要等整段音频处理完才一次性返回，中途没有进度可显示。整节课通常需要音频时长的 0.1-0.3 倍。',
+        detail: '服务商要等音频处理完才一次性返回，中途没有进度。通常要音频时长的 0.1-0.3 倍。',
         crawl: 0,
       });
     } else {
-      updateJob(id, { label: `已 ${s} 秒无新消息，任务仍在运行（请勿关闭窗口）`, pct: undefined, stage: 'wait', detail: lastMsg });
+      updateJob(id, { label: `已 ${s} 秒无新消息，任务仍在运行，别关窗口`, pct: undefined, stage: 'wait', detail: lastMsg });
     }
   }, 1000);
 
@@ -1109,7 +1109,7 @@ async function doTranscribe() {
       const resp = await fetch('/api/lectures/' + L.id + '/audio');
       if (!resp.ok) throw new Error('读取音频失败');
       const blob = await resp.blob();
-      toast('本地转写已开始。首次使用需下载转写模型（几十 MB 至几百 MB），请稍候…', '', 5000);
+      toast('本地转写已开始。首次使用要先下载转写模型，请稍候…', '', 5000);
       result = await transcribeLocal(
         blob,
         {
@@ -1133,7 +1133,7 @@ async function doTranscribe() {
             label: lastMsg,
             pct: overallPct(p.stage || '', p.pct),
             stage: phase,
-            detail: p.heartbeat ? '这一阶段没有更细的进度，别急' : '',
+            detail: p.heartbeat ? '这一阶段没有更细的进度' : '',
             crawl: p.stage === 'transcribe' ? p.slices || 6 : 0,
           });
           // 部分结果只在「这条录音还开着」时才往界面上贴，
@@ -1292,7 +1292,7 @@ async function doTranscribe() {
     if (job.stoppedLLM) {
       ensureLocalLLM(null, true)
         .then((up) => {
-          if (up) toast('本地大模型已自动恢复运行（生成笔记需使用）', 'ok', 3600);
+          if (up) toast('本地大模型已自动恢复运行，生成笔记要用它', 'ok', 3600);
         })
         .catch(() => {});
     }
@@ -1577,13 +1577,13 @@ function openNewLecture(opts = {}) {
   const subEl = $('new-lecture-sub');
 
   nameIn.value = title;
-  subEl.textContent = subtitle || '给这条录音起个名字，顺便定一下笔记怎么写。只有这一条录音会用到这些设置。';
+  subEl.textContent = subtitle || '给这条录音起个名字，定一下笔记怎么写。这些设置只对这条录音生效。';
   nameIn.closest('.field').hidden = !showName;
   $('new-lecture-title').textContent = prefs ? '笔记设置' : '新建录音';
   $('btn-nl-create').textContent = prefs ? '保存' : '创建';
   $('nl-hint').textContent = prefs
-    ? '改完点保存。已经生成过的笔记不会自动重写 —— 想按新风格重做，保存后再点一次「重新润色」。'
-    : '风格、重点条数、提示词都只对这条录音生效。以后想改，打开它点「笔记设置」。';
+    ? '改完点保存。已有笔记不会自动重写，想按新风格重做就再点一次「重新润色」。'
+    : '这些设置只对这条录音生效。以后想改，打开它点「笔记设置」。';
 
   // 改已有录音时把上次的选择填回去；新建时一律重置成「跟全局一样」，
   // 而不是记住上一条录音的选择 —— 上一门课要 10 条重点，这门课多半不需要。
@@ -1618,11 +1618,11 @@ function openNewLecture(opts = {}) {
   const syncLangDesc = () => {
     const v = $('nl-language').value;
     if (v === 'auto') {
-      langDescEl.textContent = '交给引擎自己猜。本地转写不建议选这个 —— 实测不指定语种时，一两分钟的短录音常被猜成外语，整段只剩「(speaking in foreign language)」。';
+      langDescEl.textContent = '交给引擎自己猜。本地转写不建议选：实测不指定语种时，短录音常被猜成外语，整段只剩「(speaking in foreign language)」。';
     } else if (v === 'zh') {
-      langDescEl.textContent = '中文课。本地转写必须指定语种，否则容易整段丢字；云端大部分模型自己也认得出来。';
+      langDescEl.textContent = '中文课。本地转写必须指定语种，否则容易整段丢字。';
     } else {
-      langDescEl.textContent = '英语课。选错语种云端会真的按那种语言识别：中文课选成 English，实测只输出了四分之一的内容。';
+      langDescEl.textContent = '英语课。选错语种云端会按那种语言识别：中文课选成 English，实测只输出了四分之一。';
     }
   };
   $('nl-language').onchange = syncLangDesc;
@@ -1718,7 +1718,7 @@ function applyRemoteMode(health) {
 
 /** 手机上传完只提示一句、刷新列表，不跳详情 —— 详情里全是手机上干不了的事 */
 function toastUploadedOnPhone(title) {
-  toast(`已上传：${title}。去电脑上打开「讲义笔记」就能转写和生成笔记了。`, 'ok', 6000);
+  toast(`已上传：${title}。去电脑上打开「讲义笔记」处理。`, 'ok', 6000);
 }
 
 /** 把 notePrefs 写进这条录音的 meta（服务端 PATCH 允许任意字段） */
@@ -2631,7 +2631,7 @@ function renderUpdateBox() {
   else if (updateState.downloaded) btnInstall.textContent = '立即安装';
   else btnInstall.textContent = '下载并安装';
 
-  if (updateState.busy === 'installing') status.textContent = '装完会自动打开，别急着点。';
+  if (updateState.busy === 'installing') status.textContent = '装完会自动打开。';
   else if (downloading) status.textContent = '下载中可以关掉设置，装好会提示。';
   else if (updateState.downloaded) status.textContent = '安装包已就绪，点「立即安装」会先退出再装。';
   else status.textContent = canInstall ? '' : '这一份是绿色版，请到下载页手动替换。';
@@ -2991,23 +2991,23 @@ function renderLan() {
       status.textContent = '';
       status.className = 'hint';
     } else if (!hostOnLan) {
-      status.textContent = '这个服务启动时只绑了本机，手机连不上。用启动器重新启动后再开这里。';
+      status.textContent = '服务只绑了本机，手机连不上。用启动器重新启动。';
       status.className = 'hint err';
     } else if (remote) {
       status.textContent = on ? '已开启（手机能连过来）。' : '现在是关着的。';
       status.className = on ? 'hint ok' : 'hint';
     } else if (on) {
-      status.textContent = '已开启 —— 手机连同一个 Wi-Fi，浏览器里打开上面这个地址（后面那串字母别漏）。';
+      status.textContent = '已开启。手机在同一 Wi-Fi 下打开上面这个地址。';
       status.className = 'hint ok';
     } else {
-      status.textContent = '现在是关着的。手机连上来只会看到 403，不会读到任何东西。';
+      status.textContent = '现在是关着的。';
       status.className = 'hint';
     }
   }
 
   if (warn) {
     if (hostOnLan && !on && !unknown) {
-      warn.textContent = '开着的时候，同一个 Wi-Fi 下的任何设备只要知道那串地址就能打开你的页面。传完录音记得回来关掉。';
+      warn.textContent = '同一 Wi-Fi 下任何设备知道地址就能打开。传完记得关掉。';
       warn.hidden = false;
     } else {
       warn.hidden = true;
@@ -3174,7 +3174,7 @@ async function moveStorage(which) {
     if (!confirm(ask)) return;
 
     btn.textContent = '复制中…';
-    hint.textContent = '正在复制，期间请不要关闭窗口…';
+    hint.textContent = '正在复制，别关窗口…';
     hint.className = 'hint';
     const r = await api('/storage/move', { method: 'POST', body: { which, dir: raw } });
     // oldKept 由服务端判断「源目录和新位置是不是同一个」。同一个就说明
@@ -3221,8 +3221,8 @@ async function resetStorage(which) {
   }
   if (!confirm(
     `把${label}改回默认位置？\n\n默认位置：${st.defaultDir}\n\n` +
-    '注意：现有文件不会自动搬回去。如果默认位置是空的，录音列表会看起来「空了」——' +
-    '文件其实还在你原来设的那个目录里，随时可以再设回去。',
+    '注意：现有文件不会搬回去。默认位置是空的话，录音列表看起来会「空了」，' +
+    '文件还在原来那个目录里。',
   )) return;
   try {
     await api('/config', { method: 'PUT', body: { storage: { [isModels ? 'modelsDir' : 'lecturesDir']: '' } } });
@@ -3902,7 +3902,7 @@ function bind() {
       const data = await api('/keys', { method: 'POST', body: { key: k, provider: $('s-provider').value } });
       state.keyVault = data.keys || [];
       renderKeyVault(state.keyVault);
-      toast(data.duplicate ? '这把 Key 已经在清单里了' : '已存好，别忘了点右下角「保存」', 'ok');
+      toast(data.duplicate ? '这把 Key 已经在清单里了' : '已存好，点右下角「保存」', 'ok');
     } catch (e) {
       toast('保存失败：' + e.message, 'err');
     }
@@ -4084,10 +4084,10 @@ async function boot() {
         state.lanNote = '这台机器上服务只绑了本机，手机连不上。';
       } else if (!lanOn) {
         $('lan-hint').textContent =
-          '想用手机上传录音？先到 设置 → ④ 手机访问 把开关打开，地址就会出现在这里。';
+          '想用手机上传录音？先到 设置 → ④ 手机访问 把开关打开。';
         state.lanNote = '先在 设置 → ④ 手机访问 打开开关，地址会显示在这里。';
       } else {
-        $('lan-hint').textContent = `手机上传地址（连同一个 Wi-Fi）：${lan.join('  ')}`;
+        $('lan-hint').textContent = `手机上传地址（同一 Wi-Fi 下）：${lan.join('  ')}`;
         state.lanNote = `现在这台电脑的地址：${lan.join('   ')}`;
       }
     }

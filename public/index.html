@@ -99,24 +99,24 @@
       <div class="empty-card">
         <div class="empty-mark"><svg class="i"><use href="#i-headphones"/></svg></div>
         <h2><span class="pc-only">把课堂录音，变成能直接复习的笔记</span><span class="only-remote">把这节课的录音传到电脑上</span></h2>
-        <p><span class="pc-only">把手机里录的课导进来，自动转成文字、自动挑出重点，生成能直接复习的课堂笔记。</span><span class="only-remote">手机上不用装 App、不用登录：选个文件传上去，转文字、挑重点、导出都在电脑上做。</span></p>
+        <p><span class="pc-only">把手机里录的课导进来，自动转成文字、挑出重点，生成能直接复习的笔记。</span><span class="only-remote">手机上不用装 App、不用登录，选个文件传上来就行。</span></p>
         <div class="empty-actions">
           <button class="btn primary big" id="btn-import-2">选择音频文件</button>
           <button class="btn big phone-hide" id="btn-demo">先用示例体验</button>
         </div>
         <ol class="steps phone-hide">
-          <li><b>手机录音</b>：用手机自带的录音机上课录音（不用装 App）。</li>
-          <li><b>传到电脑</b>：手机和电脑连同一个 Wi-Fi，用手机浏览器打开本页的局域网地址上传；或者直接微信/数据线拷到电脑。</li>
-          <li><b>自动整理</b>：在本页点「开始转写」，转写完笔记会自动生成（重点 + 逐字稿 + 自测题），不用再点。</li>
-          <li><b>导出</b>：点「导出 Word」，用 Word 或 WPS 打开就是一份排版好的复习笔记。</li>
+          <li><b>手机录音</b>：用手机自带的录音机上课录音。</li>
+          <li><b>传到电脑</b>：在同一 Wi-Fi 下，用手机浏览器打开本页的局域网地址上传；或者直接微信/数据线拷到电脑。</li>
+          <li><b>自动整理</b>：在本页点「开始转写」，转写完笔记会自动生成。</li>
+          <li><b>导出</b>：支持导出 Word 和 PDF，打开就是一份排版好的复习笔记。</li>
         </ol>
         <!-- 手机上（另一台设备通过局域网打开）走这一份说明。
              两边不共用同一段文字：电脑版讲的是「在本页转写、导出」，而这些
              在手机上根本点不到 —— 照抄过去等于骗人。 -->
         <ol class="steps only-remote">
-          <li><b>在电脑上录音</b>：用手机自带的录音机上课录音，文件留在手机里。</li>
-          <li><b>点上面的按钮传上去</b>：选文件、起个名字，传完这一步就结束了，手机会提示「已上传」。</li>
-          <li><b>回到电脑上处理</b>：转写、生成笔记、导出 Word / PDF 都在电脑上做，手机上不用管。</li>
+          <li><b>手机录音</b>：用手机自带的录音机上课录音。</li>
+          <li><b>点上面的按钮传上去</b>：选文件、起个名字就传完了。</li>
+          <li><b>回电脑上处理</b>：转写、笔记、导出都在电脑上做。</li>
         </ol>
         <!-- 这条提示是给电脑上的人看的（「去设置里打开手机访问」）。手机上已经
              在传了，还在这儿说「怎么开手机访问」等于对着已经进门的人教开门。 -->
@@ -204,7 +204,7 @@
             <span class="pane-hint" id="note-source"></span>
           </div>
           <article class="markdown" id="note-view">
-            <p class="placeholder">尚未生成笔记。请先点击「① 开始转写」，转写完成后笔记会自动生成。</p>
+            <p class="placeholder">尚未生成笔记。点「① 开始转写」。</p>
           </article>
         </div>
         <div class="pane tx-pane">
@@ -243,7 +243,7 @@
 <div class="modal" id="new-lecture-modal" hidden>
   <div class="modal-card">
     <h3 id="new-lecture-title">新建录音</h3>
-    <p class="hint" id="new-lecture-sub">给这条录音起个名字，顺便定一下笔记怎么写。只有这一条录音会用到这些设置。</p>
+    <p class="hint" id="new-lecture-sub">给这条录音起个名字，定一下笔记怎么写。这些设置只对这条录音生效。</p>
 
     <div class="field">
       <label for="nl-title">录音名</label>
@@ -251,7 +251,7 @@
     </div>
 
     <div class="field phone-hide">
-      <label for="nl-extra">提示词 <span class="hint">（空白即默认）</span></label>
+      <label for="nl-extra">提示词</label>
       <textarea id="nl-extra" rows="3" spellcheck="false" placeholder="如：这是法学课，请把法条编号写全；重点用【】标出"></textarea>
     </div>
 
@@ -279,7 +279,7 @@
     <p class="hint" id="nl-style-desc"></p>
 
     <div class="field phone-hide">
-      <label for="nl-language">录音语言 <span class="hint">（影响转写准确度）</span></label>
+      <label for="nl-language">录音语言</label>
       <select id="nl-language">
         <option value="zh">中文</option>
         <option value="en">English</option>
@@ -288,7 +288,7 @@
       <p class="hint" id="nl-language-desc"></p>
     </div>
 
-    <p class="hint" id="nl-hint">风格、重点条数、提示词都只对这条录音生效。以后想改，打开它点「笔记设置」。</p>
+    <p class="hint" id="nl-hint">只对这条录音生效。以后想改，打开它点「笔记设置」。</p>
 
     <div class="modal-actions">
       <button class="btn ghost" id="btn-nl-cancel">取消</button>
@@ -307,7 +307,7 @@
     <div class="settings-body">
 
       <section class="sect">
-        <h4>① 服务商（转写 + AI 笔记共用一家）</h4>
+        <h4>① 服务商</h4>
         <div class="field">
           <label>服务商</label>
           <select id="s-provider">
@@ -332,7 +332,7 @@
             </select>
           </div>
           <div class="field wide">
-            <label>依赖库 CDN（不通会自动换备用源）</label>
+            <label>依赖库 CDN</label>
             <input id="s-cdn" placeholder="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3">
           </div>
         </div>
@@ -351,7 +351,7 @@
 
         <div class="grid2" data-for="cloud">
           <div class="field">
-            <label>接口地址（自定义时填）</label>
+            <label>接口地址</label>
             <input id="s-asr-endpoint" placeholder="https://your-server/v1/audio/transcriptions">
           </div>
         </div>
@@ -372,7 +372,7 @@
           </div>
         </div>
         <div class="field wide" data-for="key" id="key-field">
-          <label>API Key（转写 + 笔记共用这一把）</label>
+          <label>API Key</label>
 
           <!-- 第一行 = 当前正在用的那一把。平时是密码点，点眼睛才显示明文
                （本机才看得到；手机/局域网根本拿不到明文）。
@@ -409,7 +409,7 @@
         </div>
         <div class="grid2">
           <div class="field">
-            <label>接口地址（已自动填写，一般无需修改）</label>
+            <label>接口地址</label>
             <input id="s-llm-base" placeholder="https://api.siliconflow.cn/v1">
           </div>
         </div>
@@ -446,9 +446,7 @@
       <section class="sect">
         <h4>④ 手机访问</h4>
         <p class="hint">
-          开启后，同一个 Wi-Fi 下的手机、平板、别的电脑能打开下面这个地址，把录音传进来。
-          <b>默认是关的</b> —— 关着的时候，就算别人拿到地址也只会看到 403，一个字节都读不到。
-          录完传完记得关掉。
+          开启后，同一 Wi-Fi 下的手机、平板能打开下面这个地址传录音。<b>默认是关的</b>，关着时别人拿到地址也打不开。传完记得关掉。
         </p>
         <label class="check"><input type="checkbox" id="s-lan-enabled"> 允许同一 Wi-Fi 的设备访问</label>
         <div class="field wide">
@@ -496,7 +494,7 @@
 
     </div>
     <div class="modal-foot">
-      <span class="hint">设置存在数据目录下的 <code>config.json</code>（默认在 <code>%LOCALAPPDATA%\LectureNotes\data</code>，实际位置见上面 ③ 存储位置）。Key 只存在这台电脑上，局域网访问时不会下发。</span>
+      <span class="hint">设置存在数据目录下的 <code>config.json</code>。Key 只存在这台电脑上，局域网访问时不会下发。</span>
       <div>
         <!-- 打赏入口放在这排按钮里，不放在滚动的设置正文里 ——
              正文滚到底才看得见，等于藏起来了；这一排永远固定在最底部。 -->

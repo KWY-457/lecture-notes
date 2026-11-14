@@ -214,7 +214,7 @@ ${body}
 export async function htmlToPdf(html, { browser = '', timeoutMs = 60000 } = {}) {
   const exe = browser || findBrowser();
   if (!exe) {
-    const err = new Error('这台电脑上没找到 Chrome 或 Edge，导不了 PDF。装一个 Chrome（或 Edge）再试就行 —— 别的方式都办不到中文字体嵌入。');
+    const err = new Error('这台电脑上没找到 Chrome 或 Edge，导不了 PDF。装一个 Chrome（或 Edge）再试就行 —— 只有浏览器能嵌入中文字体。');
     err.code = 'NO_BROWSER';
     throw err;
   }
@@ -244,7 +244,7 @@ export async function htmlToPdf(html, { browser = '', timeoutMs = 60000 } = {}) 
         } catch {
           /* 已经退了 */
         }
-        reject(new Error(`导出 PDF 超时（${Math.round(timeoutMs / 1000)} 秒）。相机可能是第一次启动浏览器比较慢，再点一次试试。`));
+        reject(new Error(`导出 PDF 超时（${Math.round(timeoutMs / 1000)} 秒）。第一次启动浏览器会比较慢，再点一次试试。`));
       }, timeoutMs);
       child.stderr.on('data', (d) => {
         stderr += String(d);

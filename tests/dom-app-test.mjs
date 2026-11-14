@@ -919,7 +919,7 @@ console.log('\n--- 无时间戳的逐字稿 ---\n');
     check('无时间戳时不渲染时间列', !rows[0].innerHTML.includes('class="t"'), rows[0].innerHTML.slice(0, 60));
     check('无时间戳时段落不可点', typeof rows[3].onclick !== 'function', String(rows[3].onclick));
     check('无时间戳时给出提示条', txt.hidden === false, txt.textContent.slice(0, 40));
-    check('提示条写明原因与补救办法', /不提供逐句时间戳/.test(txt.textContent) && /本地模型/.test(txt.textContent), txt.textContent);
+    check('提示条写明原因与补救办法', /(不提供|不给)逐句时间戳/.test(txt.textContent) && /本地模型/.test(txt.textContent), txt.textContent);
 
     st.current.transcript.segments = real;
     fire(txSearch, 'input');
