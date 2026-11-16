@@ -231,16 +231,50 @@ export function cleanSegments(segments, stats) {
   });
 }
 
-/** 统计清洗前后有多少字发生变化，用于给用户一个交代 */
+/**
+ * 统计清洗前后有多少字发生变化，用于给用户一个交代。
+ *
+ * 2026-11 改：原来是「按位置逐字比」，只要中间插进一个字，后面整串都会算成「改了」。
+ * 补标点上线后这个问题被放大到离谱 —— 400 段 4800 字的稿子报「修正 4488 处」，
+ * 其实只是多了标点。现在按段算编辑距离，插入标点只算插入的那几个。
+ */
 export function diffCount(rawSegments, cleanSegs) {
-  const a = (rawSegments || []).map((s) => s.text || '').join('');
-  const b = (cleanSegs || []).map((s) => s.text || '').join('');
-  if (!a) return 0;
+  const a = rawSegments || [];
+  const b = cleanSegs || [];
+  if (!a.length) return 0;
+  if (a.length === b.length) {
+    let n = 0;
+    for (let i = 0; i < a.length; i++) n += editDistance(String(a[i].text || ''), String(b[i].text || ''));
+    return n;
+  }
+  // 段数对不上（理论上不该发生）时退回原来的粗算法
+  const s1 = a.map((s) => s.text || '').join('');
+  const s2 = b.map((s) => s.text || '').join('');
   let n = 0;
-  const len = Math.min(a.length, b.length);
-  for (let i = 0; i < len; i++) if (a[i] !== b[i]) n++;
-  n += Math.abs(a.length - b.length);
-  return n;
+  const len = Math.min(s1.length, s2.length);
+  for (let i = 0; i < len; i++) if (s1[i] !== s2[i]) n++;
+  return n + Math.abs(s1.length - s2.length);
+}
+
+/** 两句话的编辑距离（Levenshtein，句子很短，滚动数组即可） */
+function editDistance(x, y) {
+  if (x === y) return 0;
+  if (!x.length) return y.length;
+  if (!y.length) return x.length;
+  let prev = new Array(y.length + 1);
+  let cur = new Array(y.length + 1);
+  for (let j = 0; j <= y.length; j++) prev[j] = j;
+  for (let i = 1; i <= x.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= y.length; j++) {
+      const cost = x[i - 1] === y[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    const t = prev;
+    prev = cur;
+    cur = t;
+  }
+  return prev[y.length];
 }
 
 /**

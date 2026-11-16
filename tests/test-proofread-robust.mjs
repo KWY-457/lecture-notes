@@ -67,6 +67,20 @@ globalThis.fetch = async (url, init = {}) => {
     // 正是 67916f92 丢字 bug 的模式（2295 字进去、303 字出来、条目数 1===1 恒过）。
     // 长度护栏（srcLen > 40 && gotLen < srcLen * 0.6）必须拦下这种结果。
     content = JSON.stringify(good.map((s) => ({ ...s, text: '短' })));
+  } else if (mode === 'merge') {
+    // 模型补标点时把相邻两条合成一条（2026-11 实测：2000 字样本 60 条只回 59 条）。
+    // 旧版「条目数必须相等」会让整块白跑、降级重试；新版按时间区间铺回、按时长切分。
+    const merged = [];
+    for (let i = 0; i < good.length; i += 2) {
+      const a = good[i];
+      const b = good[i + 1];
+      merged.push({
+        start: a.start,
+        end: b ? b.end : a.end,
+        text: b ? a.text + '，' + b.text : a.text,
+      });
+    }
+    content = JSON.stringify(merged);
   }
   return new Response(JSON.stringify({ ok: true, content, usage: null, model: 'fake' }), {
     status: 200,
@@ -139,6 +153,15 @@ await runCase('彻底不是 JSON', 'garbage', true);
 await runCase('模型返回错误', 'throws', true);
 await runCase('只回一半条目', 'half', true);
 await runCase('条目数对但字数被吞', 'shrink', true);
+
+// 相邻两条被合并：2026-11 加了补标点示范之后模型的常见行为。
+// 必须**不降级**地收下（旧版按条目数相等否决，整块白跑、长录音慢好几倍），
+// 而且段数、时间戳、字数都得守恒。
+const rm = await runCase('相邻两条被合并', 'merge', false);
+const mergedChars = (rm?.segments || []).reduce((n, s) => n + s.text.length, 0);
+check('合并被切回原段数后字数不丢', mergedChars >= totalChars * 0.95, `得到 ${mergedChars} / ${totalChars}`);
+const punctSegs = (rm?.segments || []).filter((s) => /[，。]/.test(s.text)).length;
+check('合并切回来的段里补的标点还在', punctSegs > 0, `带标点的段 ${punctSegs}/${rm?.segments?.length ?? 0}`);
 
 console.log(`\n${pass} 通过 / ${fail} 失败`);
 process.exit(fail ? 1 : 0);

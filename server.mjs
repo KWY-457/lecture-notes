@@ -1652,6 +1652,56 @@ function safeFileName(name, fallback = 'LectureNotes-setup.exe') {
   return trimmed.toLowerCase().endsWith('.exe') ? trimmed : fallback;
 }
 
+/**
+ * 长请求的 POST（走 node:http，绕开 undici 的 300 秒 headersTimeout）。
+ *
+ * 为什么不用 fetch：Node 内置 fetch（undici）有两条默认硬墙 —— headersTimeout 300 秒、
+ * bodyTimeout 300 秒。本地 14B 跑校对要「逐条回抄原文」，2000 字的块在纯 CPU 上
+ * 就要跑 350~390 秒，**必然撞墙**，于是整块被判失败、悄悄降级成「没校对」的原文 ——
+ * 用户看到的就是「本地转写的逐字稿一整个没标点、错字也没改」。
+ *
+ * 这里用 node:http 手写，超时完全由调用方给的 timeoutMs 决定。
+ * 只支持 http（本地 llama-server 就是 http）；https 继续走 fetch。
+ */
+function postJsonLong(url, { body, headers = {}, timeoutMs = 0, signal } = {}) {
+  const u = new URL(url);
+  if (u.protocol !== 'http:') return null; // 交给调用方退回 fetch
+  return new Promise((resolve, reject) => {
+    const payload = typeof body === 'string' ? body : JSON.stringify(body);
+    const req = http.request(
+      {
+        protocol: u.protocol,
+        hostname: u.hostname,
+        port: u.port || 80,
+        path: (u.pathname || '/') + (u.search || ''),
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), ...headers },
+        timeout: 0,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode || 0, text: Buffer.concat(chunks).toString('utf8') }));
+        res.on('error', reject);
+      }
+    );
+    if (timeoutMs > 0) {
+      req.setTimeout(timeoutMs, () => {
+        req.destroy(new Error(`超过 ${Math.round(timeoutMs / 1000)} 秒没有返回`));
+      });
+    }
+    if (signal) {
+      const onAbort = () => req.destroy(new Error('已取消'));
+      if (signal.aborted) return onAbort();
+      signal.addEventListener('abort', onAbort, { once: true });
+      req.on('close', () => signal.removeEventListener('abort', onAbort));
+    }
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 /** 带超时的 fetch。服务器上所有对外请求都该有上限，否则一个卡住的源会拖死整个界面。 */
 async function fetchWithTimeout(url, { timeoutMs = 8000, headers = {}, method = 'GET' } = {}) {
   const ac = new AbortController();
@@ -2911,35 +2961,58 @@ async function handleApi(req, res, u) {
     const apiKey = body.apiKey || l.apiKey;
     const model = body.model || l.model;
     if (!baseUrl) return fail(res, 400, '未配置 LLM 地址');
-    const ac = new AbortController();
     // 校对整节课可能要求模型逐条回抄原文，180 秒不够；但上限也要有，否则模型卡住会一直挂着
     const timeoutMs = Number(body.timeoutMs) || Number(l.timeoutMs) || 180000;
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
-    let resp;
-    try {
-      resp = await fetch(baseUrl + '/chat/completions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: 'Bearer ' + apiKey } : {}) },
-        body: JSON.stringify({
-          model,
-          temperature: Number(body.temperature ?? l.temperature ?? 0.3),
-          messages: body.messages,
-          stream: false,
-          // 不传 max_tokens 时用服务端默认值；llama-server 默认 -n_predict 512，
-          // 会把输出硬截断成半截 JSON —— 所以"要求逐条回抄原文"的任务必须显式给足配额
-          ...(body.max_tokens ? { max_tokens: Number(body.max_tokens) } : {}),
-          // 思考型模型压住推理，否则请求会撞 fetch 的 300 秒 headersTimeout（见 thinkingHint）
-          ...thinkingHint(model),
-        }),
-        signal: ac.signal,
-      });
-    } catch (e) {
+    const payload = {
+      model,
+      temperature: Number(body.temperature ?? l.temperature ?? 0.3),
+      messages: body.messages,
+      stream: false,
+      // 不传 max_tokens 时用服务端默认值；llama-server 默认 -n_predict 512，
+      // 会把输出硬截断成半截 JSON —— 所以"要求逐条回抄原文"的任务必须显式给足配额
+      ...(body.max_tokens ? { max_tokens: Number(body.max_tokens) } : {}),
+      // 思考型模型压住推理，否则请求会撞 fetch 的 300 秒 headersTimeout（见 thinkingHint）
+      ...thinkingHint(model),
+    };
+    const headers = { ...(apiKey ? { authorization: 'Bearer ' + apiKey } : {}) };
+
+    // 优先走 node:http：undici 的 300 秒 headersTimeout 会在长校对任务上提前掐断，
+    // 而 llm.timeoutMs 配的是 420 秒 —— 掐断后整块被判失败、悄悄退回未校对原文。
+    let status;
+    let txt;
+    const longCall = postJsonLong(baseUrl + '/chat/completions', {
+      body: payload,
+      headers,
+      timeoutMs,
+    });
+    if (longCall) {
+      try {
+        const r = await longCall;
+        status = r.status;
+        txt = r.text;
+      } catch (e) {
+        return fail(res, 502, 'LLM 请求失败: ' + (e.cause?.message || e.message));
+      }
+    } else {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), timeoutMs);
+      let resp;
+      try {
+        resp = await fetch(baseUrl + '/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...headers },
+          body: JSON.stringify(payload),
+          signal: ac.signal,
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        return fail(res, 502, 'LLM 请求失败: ' + (e.cause?.message || e.message));
+      }
       clearTimeout(timer);
-      return fail(res, 502, 'LLM 请求失败: ' + (e.cause?.message || e.message));
+      status = resp.status;
+      txt = await resp.text();
     }
-    clearTimeout(timer);
-    const txt = await resp.text();
-    if (!resp.ok) return fail(res, resp.status, `LLM 返回 ${resp.status}: ` + txt.slice(0, 500));
+    if (status < 200 || status >= 300) return fail(res, status, `LLM 返回 ${status}: ` + String(txt).slice(0, 500));
     let data;
     try {
       data = JSON.parse(txt);

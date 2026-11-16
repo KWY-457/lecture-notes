@@ -2391,7 +2391,10 @@ function renderFaq(keyword = '') {
     h.textContent = apiDef?.title || 'API 怎么申请';
     g.appendChild(h);
     // 只展开「现在正在用」的那一家：另外两家展开等于把弹窗撑成三屏。
-    for (const [id, t] of tuts) g.appendChild(faqTutorial(id, t, id === curProvider && !kw));
+    // 用本地转写时 curProvider 是 'local'，教程里没有这一家 —— 那就展开第一家，
+    // 免得三行全折叠、用户不知道该点哪个。
+    const openId = tuts.some(([id]) => id === curProvider) ? curProvider : tuts[0][0];
+    for (const [id, t] of tuts) g.appendChild(faqTutorial(id, t, id === openId && !kw));
     host.appendChild(g);
   }
 

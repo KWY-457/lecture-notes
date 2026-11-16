@@ -1772,18 +1772,95 @@ export function salvageJsonArray(text) {
   return out;
 }
 
-/** 把捞回来的条目按 start 匹配回原块（匹配不上就丢，宁可漏改不可错位） */
+/**
+ * 把模型回抄的条目按时间轴铺回原块。
+ *
+ * 为什么不能只按 start 精确匹配（2026-11 改）：校对提示词里加了「补标点」的示范后，
+ * 模型补标点的同时会把相邻两条合成一条（实测 2000 字样本 60 条只回 59 条）。
+ * 旧版要求「条目数必须与输入完全相等」，一合并整块就作废、降级到更小的块重跑，
+ * 长录音因此白跑好几遍。现在改成**按时间区间铺回**：
+ *   · 一条输出只覆盖一段 → 直接给它；
+ *   · 一条输出覆盖多段（被合并了）→ 按各段时长占比把文字切回去，切点尽量落在标点后面。
+ *
+ * 返回 null = 对不齐（有段没被任何条目覆盖）。调用方据此判这一级失败，
+ * 宁可退回确定性清洗也不能丢段 —— 少一段就是逐字稿缺字，用户看到的是缺句的笔记。
+ */
 function adoptItems(items, chunk) {
-  const out = [];
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
-    const seg = chunk.find((s) => Math.abs(Number(s.start) - Number(item.start)) < 0.01);
-    if (!seg) continue;
-    const text = String(item.text ?? '').trim();
-    if (!text) continue; // 空文本一律不采纳，防止把整段抹掉
-    out.push({ start: seg.start, end: seg.end, text });
+  const clean = (Array.isArray(items) ? items : [])
+    .filter((it) => it && typeof it === 'object' && String(it.text ?? '').trim())
+    .map((it) => ({ start: Number(it.start), end: Number(it.end), text: String(it.text).trim() }))
+    .filter((it) => Number.isFinite(it.start))
+    .sort((a, b) => a.start - b.start);
+  if (!clean.length || !chunk.length) return null;
+
+  const out = new Array(chunk.length).fill(null);
+
+  for (let i = 0; i < clean.length; i++) {
+    const it = clean[i];
+    const lo = it.start;
+    // 模型给的 end 常常缺、或者等于 start；缺了就用「下一个条目的 start」当上界
+    const hi = Number.isFinite(it.end) && it.end > lo + 0.01 ? it.end : clean[i + 1]?.start ?? lo + 1;
+    const idx = [];
+    chunk.forEach((s, j) => {
+      if (out[j]) return; // 已被前面的条目认领，不重复分配
+      const a = Number(s.start);
+      const b = Number(s.end);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+      if (b > lo + 0.01 && a < hi - 0.01) idx.push(j);
+    });
+    if (!idx.length) continue;
+    if (idx.length === 1) {
+      out[idx[0]] = it.text;
+      continue;
+    }
+    const pieces = splitByDuration(it.text, idx.map((j) => Math.max(0.05, Number(chunk[j].end) - Number(chunk[j].start))));
+    idx.forEach((j, k) => {
+      out[j] = pieces[k];
+    });
   }
-  return out;
+
+  if (out.some((t) => !t)) return null;
+  return out.map((text, j) => ({ start: chunk[j].start, end: chunk[j].end, text }));
+}
+
+/**
+ * 把一段文字按时长权重切成 n 份，每份至少 1 个字。
+ * 切点优先吸附到后面的标点（12 字窗口内），这样被合并拆开后读起来还是整句。
+ */
+function splitByDuration(text, spans) {
+  const n = spans.length;
+  const total = spans.reduce((a, b) => a + b, 0) || n;
+  const cuts = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    acc += spans[i];
+    cuts.push(i === n - 1 ? text.length : Math.round((text.length * acc) / total));
+  }
+  // 严格递增，且每份至少 1 字
+  for (let i = 0; i < n - 1; i++) {
+    if (cuts[i] < i + 1) cuts[i] = i + 1;
+    if (i && cuts[i] <= cuts[i - 1]) cuts[i] = cuts[i - 1] + 1;
+  }
+  if (cuts[n - 2] >= text.length) cuts[n - 2] = Math.max(n - 1, text.length - 1);
+  // 吸附到标点
+  for (let i = 0; i < n - 1; i++) {
+    const want = cuts[i];
+    const from = Math.max(i + 1, want - 12);
+    const to = Math.min((i + 1 < n - 1 ? cuts[i + 1] : text.length) - 1, want + 12);
+    let best = want;
+    for (let k = from; k <= to; k++) {
+      if (/[，。！？、；：,.!?]/.test(text[k]) && Math.abs(k + 1 - want) < Math.abs(best - want)) best = k + 1;
+    }
+    if (i && best <= cuts[i - 1]) best = cuts[i - 1] + 1;
+    cuts[i] = best;
+  }
+  const parts = [];
+  let prev = 0;
+  for (const c of cuts) {
+    parts.push(text.slice(prev, c));
+    prev = c;
+  }
+  return parts;
 }
 
 /** 对一块调用大模型。maxTokens 给足 —— 复核要求逐条回抄原文，输出长度和输入同量级 */
@@ -1797,8 +1874,18 @@ async function proofreadOnce(chunk, { signal }) {
         content:
           '你是中文语音识别的校对员。下面是一段课堂录音的识别结果（JSON 数组），带时间戳。请逐条处理：' +
           '1) 繁体字改简体字；2) 按上下文纠正音近错别字（如「变力」→「遍历」、「鸡疫」→「基因」）；' +
-          '3) 删除乱码符号、重复标点、无意义的口头语碎片；4) 保留原意，不要增删内容，不要把口语改成书面语；' +
+          // 第 3 条是 2026-11 加的重点：本地 Whisper 因为开着时间戳模式，几乎不吐标点，
+          // 旧提示词只让「删」标点、从没让「补」，于是一整篇读下来没有断句。
+          '3) 识别结果的标点基本全丢了：要按语义把逗号、句号、问号补回去，同时删掉乱码符号、重复标点、无意义的口头语碎片；' +
+          '4) 保留原意，不要增删内容，不要把口语改成书面语；' +
           '5) 把误识成拼音首字母或英文字母的片段按上下文还原成中文（如「BJR考试」→「闭卷考试」、「B末成绩」→「期末成绩」、「BJ」→「闭卷」），拿不准的保留原样、不要瞎猜。' +
+          // 只写规则实测完全无效（664 字只改了 2 个字，模型原样抄回去）。
+          // 给了示范之后才真的会补：同一个样本标点密度 1.43 → 9.19/百字。
+          '示范一：输入 [{"start":0,"end":5,"text":"那要想办法突然就必须放弃一定的狂"},{"start":5,"end":9,"text":"比如这位女士很不容易"}] ' +
+          '应输出 [{"start":0,"end":5,"text":"那要想办法。突然就必须放弃一定的狂。"},{"start":5,"end":9,"text":"比如，这位女士很不容易。"}]。\n' +
+          '示范二：输入 [{"start":0,"end":4,"text":"我说人生还得乐观非常认真也非常务实"},{"start":4,"end":8,"text":"但总会遇到各种各样的困难"}] ' +
+          '应输出 [{"start":0,"end":4,"text":"我说，人生还得乐观，非常认真，也非常务实。"},{"start":4,"end":8,"text":"但总会遇到各种各样的困难。"}]。\n' +
+          '注意示范里只是多出了标点，文字一个都没变。' +
           '输出一个 JSON 数组，元素个数和顺序必须与输入**完全一致**，每个元素 {"start":数字,"end":数字,"text":"校对后的文字"}。' +
           'start/end 必须和输入一模一样，text 必须是校对后的完整文字，不许留空、不许合并、不许省略。只输出 JSON，不要任何解释。',
       },
@@ -1809,7 +1896,8 @@ async function proofreadOnce(chunk, { signal }) {
       temperature: 0.1,
       // 关键：。llama-server 默认 -n_predict 512，输出会被截成半截 JSON。
       // 这里按"输入字符数 × 1.6 + 512"给配额。中文一个字约 1 token，留足余量。
-      maxTokens: Math.min(8192, Math.ceil(body.length * 1.6) + 512),
+      // 补标点会让输出略长（实测 2000 字进 2130 字出），所以再加 10% 余量。
+      maxTokens: Math.min(8192, Math.ceil(body.length * 1.8) + 512),
       timeoutMs: 600000,
     }
   );
@@ -1858,19 +1946,22 @@ export async function cleanTranscriptViaLLM(segments, { onProgress = () => {}, s
           break;
         }
         const items = adoptItems(r.items, part);
-        // 采纳条件：**条目数必须和输入完全相等**。
-        // 这里不能用"回抄一半也行" —— 少一条就是丢一段逐字稿，用户看到的是缺字的笔记。
-        // 条目数对不上说明模型偷懒或输出被截断，这一级作废、换更小的块重试。
-        if (items.length !== part.length) {
+        // 采纳条件：**每一段都得有文字**（adoptItems 对不齐就返 null）。
+        // 2026-11 之前这里要求「条目数必须和输入完全相等」，但加了补标点示范之后
+        // 模型会把相邻两条合成一条，条目数天然少 1~2 条 —— 那条规矩会让整块白跑、
+        // 降级到更小的块重试，长录音因此多花好几倍时间。现在由 adoptItems 按时间
+        // 区间铺回（合并的按各段时长切回去），只要没漏段就采纳。
+        if (!items) {
           ok = false;
           break;
         }
-        // 长度护栏（2026-10 加）：云端转写可能整篇只有 1 段，模型回抄同一条数的
-        // JSON 却只吐一句话（实测：2295 字进、303 字出）。条目数对得上 ≠ 没丢字，
-        // 必须再看总字数 —— 校对不会把话删到一半以下，少了就说明被偷懒/截断了。
+        // 长度护栏（2026-10 加，2026-11 收紧）：云端转写可能整篇只有 1 段，模型回抄
+        // 同一条数的 JSON 却只吐一句话（实测：2295 字进、303 字出）。条目数对得上 ≠ 没丢字。
+        // 阈值从 60% 提到 80%：补标点之后正常输出比输入**长**（实测 2177 → 2348 字，1.08 倍），
+        // 而规则只允许删口头语碎片，不会少两成字。80% 既能拦住偷懒，也不会误杀正常校对。
         const srcLen = part.reduce((n, s) => n + String(s.text || '').length, 0);
         const gotLen = items.reduce((n, s) => n + String(s.text || '').length, 0);
-        if (srcLen > 40 && gotLen < srcLen * 0.6) {
+        if (srcLen > 40 && gotLen < srcLen * 0.8) {
           ok = false;
           break;
         }
