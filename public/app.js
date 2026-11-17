@@ -2735,13 +2735,13 @@ function renderAbout() {
 /**
  * 打开展示协议全文的弹窗。
  *
- * 正文不写进 JS：服务端从安装目录里的 LICENSE.txt / PRIVACY.txt 读出来，
+ * 正文不写进 JS：服务端从安装目录里的 AGREEMENT.txt / PRIVACY.txt 读出来，
  * 一处维护，改条款不用动代码。
  * `mode` 只有两种：
  *   'read'  —— 从设置里点进来，纯阅读，底部换成「知道了」
  *   'ask'   —— 首次启动，需要表态，保留「同意 / 以后再说」
  */
-async function showAgreement(mode = 'read', which = 'license') {
+async function showAgreement(mode = 'read', which = 'agreement') {
   const modal = $('agree-modal');
   modal.hidden = false;
   modal.dataset.mode = mode;
@@ -2755,7 +2755,7 @@ async function showAgreement(mode = 'read', which = 'license') {
     : '';
   switchAgreementTab(which);
   // 已经拿过正文就不重复请求
-  if (!state.agreement?.text?.license && !state.agreement?.text?.privacy) {
+  if (!state.agreement?.text?.agreement && !state.agreement?.text?.privacy) {
     $('agree-text').textContent = '正在读取…';
     try {
       const r = await api('/agreement');
@@ -2763,7 +2763,7 @@ async function showAgreement(mode = 'read', which = 'license') {
         state.agreement = { ...(state.agreement || {}), ...r, text: r.text || state.agreement?.text || {} };
       }
     } catch (e) {
-      $('agree-text').textContent = '协议正文读取失败：' + e.message + '\n\n安装目录里的 LICENSE.txt / PRIVACY.txt 可以直接打开看。';
+      $('agree-text').textContent = '协议正文读取失败：' + e.message + '\n\n安装目录里的 AGREEMENT.txt / PRIVACY.txt 可以直接打开看。';
       return;
     }
   }
@@ -2780,7 +2780,7 @@ function switchAgreementTab(which) {
   const label = which === 'privacy' ? '隐私政策' : '用户协议';
   if (span) span.textContent = label;
   else t.textContent = label;
-  $('agree-modal').dataset.which = which === 'privacy' ? 'privacy' : 'license';
+  $('agree-modal').dataset.which = which === 'privacy' ? 'privacy' : 'agreement';
   renderAgreementText();
 }
 
@@ -2793,7 +2793,7 @@ function snoozeAgreement() {
 }
 
 function renderAgreementText() {
-  const which = $('agree-modal').dataset.which === 'privacy' ? 'privacy' : 'license';
+  const which = $('agree-modal').dataset.which === 'privacy' ? 'privacy' : 'agreement';
   const text = state.agreement?.text?.[which];
   if (text) $('agree-text').textContent = text;
 }
@@ -3626,7 +3626,7 @@ function bind() {
     applyProvider($('s-provider').value, { force: true });
   };
   // 协议：设置里「用户协议 / 隐私政策」两个链接 + 弹窗里的标签页
-  $('btn-show-license').onclick = () => showAgreement('read', 'license');
+  $('btn-show-license').onclick = () => showAgreement('read', 'agreement');
   $('btn-show-privacy').onclick = () => showAgreement('read', 'privacy');
 
   // 自动更新：手动检查 / 下载并安装 / 跳过这一版 / 打开下载页
@@ -3638,7 +3638,7 @@ function bind() {
     // 下载页可能为空（自定义清单没写），那时候就别开一个空白标签页
     if (u) window.open(u, '_blank', 'noopener');
   };
-  $('tab-license').onclick = () => switchAgreementTab('license');
+  $('tab-license').onclick = () => switchAgreementTab('agreement');
   $('tab-privacy').onclick = () => switchAgreementTab('privacy');
   $('btn-agree-ok').onclick = acceptAgreement;
 
@@ -4143,7 +4143,7 @@ async function boot() {
       snoozed = sessionStorage.getItem('ln-agree-snoozed') || '';
     } catch {}
     if (snoozed !== state.agreement.version) {
-      showAgreement('ask', 'license');
+      showAgreement('ask', 'agreement');
       agreementShown = true;
     }
   }

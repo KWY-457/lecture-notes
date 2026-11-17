@@ -6,23 +6,35 @@
 
 ---
 
-## 一、先说调研结论：为什么最后是自己写
+## 一、和现成的开源项目比，多做了什么
 
-你要求先看开源界有没有更成熟的方案。我把 GitHub 上相关的项目都过了一遍，结论如下：
+录音转文字这件事早就有成熟方案了，没必要重造。开工前把 GitHub 上相关的项目过了一遍，结论如下：
 
-| 开源项目 | 是什么 | 为什么没有直接拿来用 |
+| 开源项目 | 是什么 | 差在哪一步 |
 | --- | --- | --- |
-| [Hyprnote](https://github.com/fastrepl/hyprnote) | 本地优先的「会议 AI 记事本」，本机录音 + Whisper 转写 + LLM 总结，最接近需求 | 它是**桌面应用**而不是网站；偏会议场景；**手机录音导入 → 课堂笔记格式**这条链路要自己接；Windows 支持也还在完善 |
-| [Whishper](https://github.com/pluja/whishper) | 自托管网页版转写/字幕工具，带 Web UI，纯本地跑 Whisper | 转写很强，但**不做**「课堂重点提取 + 笔记格式」；需要 Docker 整套部署 |
+| [Hyprnote](https://github.com/fastrepl/hyprnote) | 本地优先的「会议 AI 记事本」，本机录音 + Whisper 转写 + LLM 总结，最接近 | 它是**桌面应用**而不是网页；偏会议场景；**手机录音导入 → 课堂笔记格式**这条链路要自己接 |
+| [Whishper](https://github.com/pluja/whishper) | 自托管网页版转写/字幕工具，纯本地跑 Whisper | 转写很强，但**不做**「课堂重点提取 + 笔记格式」；需要 Docker 整套部署 |
 | [Whisper-WebUI](https://github.com/jhj1017/Whisper-WebUI) | Gradio 网页界面，功能全（批量、字幕、翻译） | 需要 Python + ffmpeg 环境；同样不产出复习笔记 |
 | [Open Notebook](https://github.com/lfnovo/open-notebook) | NotebookLM 的开源替代，做资料研究笔记 | 面向文档研究，不处理课堂录音流水线 |
-| [whisper-web](https://github.com/xenova/whisper-web)（Xenova） | 浏览器里跑 Whisper 的示范项目 | 只是个 Demo，没有笔记、没有存储、没有长音频处理 —— **但它的技术栈（transformers.js）我直接复用了** |
-| ScribeCat / Noted / VoiceVault / scrybe 等 | 个人练习性质的小项目 | 成熟度不够，代码量小、维护少，不如自己写可控 |
+| [whisper-web](https://github.com/xenova/whisper-web)（Xenova） | 浏览器里跑 Whisper 的示范项目 | 只是个 Demo，没有笔记、没有存储、没有长音频处理 —— **但它的技术栈（transformers.js）本项目直接复用** |
+| ScribeCat / Noted / VoiceVault / scrybe 等 | 个人练习性质的小项目 | 成熟度不够，代码量小、维护少 |
 
-**结论：**
-- 语音识别这一层，**没有理由自己造轮子** —— 直接复用成熟的 Whisper 生态：浏览器端用 [🤗 Transformers.js](https://github.com/huggingface/transformers.js)（ONNX Runtime + WebGPU/WASM），云端可选硅基流动 SenseVoice / OpenAI / 任何 OpenAI 兼容接口（包括你自己搭的 faster-whisper、Whishper）。
-- 「手机录音导入 → 自动分主题 → 挑重点 → 生成笔记格式」这一层，**没有现成且好用的开源方案**，所以自己写了薄薄一层。
-- 你这台机器上**没有 Python、没有 Node、没有 ffmpeg、没有 Docker**（我都查过了），所以整个东西被设计成**零外部依赖**：服务端只用 Node 内置模块（现在约 2700 行），前端是纯静态页面（约 3500 行 JS + 740 行 CSS），转写在浏览器里跑。双击就能用。
+**所以这个项目只做两件事：**
+
+- 语音识别不造轮子 —— 直接复用 Whisper 生态：浏览器端用 [🤗 Transformers.js](https://github.com/huggingface/transformers.js)（ONNX Runtime + WebGPU/WASM），云端可选硅基流动 SenseVoice / OpenAI / 任何 OpenAI 兼容接口（包括自己搭的 faster-whisper、Whishper）。
+- 「课堂录音 → 分主题 → 挑重点 → 排出复习笔记」这一层没有现成好用的，自己写。加上中文课堂那些脏活：繁转简、纠音近错字、给没有标点的本地转写补标点。
+
+整个东西**零外部依赖**：服务端只用 Node 内置模块，前端是纯静态页面，转写在浏览器里跑。不需要 Python、不需要 ffmpeg、不需要 Docker，也不注册任何账号。双击就能用。
+
+## 一之二、许可证
+
+本项目以 **GNU Affero 通用公共许可证第 3 版（AGPL-3.0）** 发布，全文见 [LICENSE](LICENSE)。
+
+- 可以自用、改、分发，包括收费分发；
+- 但分发时必须保留作者署名与版权声明，**并把修改后的源代码以同一许可证公开** —— 包括以网络服务形式提供给别人的情况；
+- 软件不提供任何担保，转写结果请自己核对（见 [AGREEMENT.txt](AGREEMENT.txt) 第七条）。
+
+AGPL 第 13 条对「网络服务」的要求在这里其实用不上：本程序跑在你自己的电脑上，作者不运营任何在线服务，也不会接触你的录音。
 
 ---
 
@@ -349,6 +361,9 @@ lecture-notes/
 ├── server.mjs              # 零依赖服务端：静态托管 + 上传 + Range 播放 + ASR/LLM 代理 + 存储
 ├── docx.mjs                # Word 导出（手写 OOXML，零依赖）
 ├── pdf.mjs                 # PDF 导出（渲染成 HTML 交给本机浏览器的打印引擎，字体自动子集嵌入）
+├── AGREEMENT.txt           # 用户协议（安装向导要勾「我接受」的那份，界面上也能看）
+├── PRIVACY.txt             # 隐私政策
+├── LICENSE                 # AGPL-3.0 全文
 ├── public/
 │   ├── index.html          # 界面
 │   ├── app.css             # 样式（自适应；手机端只留上传，见「手机上为什么只有上传」）
@@ -381,7 +396,7 @@ lecture-notes/
     ├── run-all.mjs             # 测试总入口（离线 23 项；加 --with-server 再跑 15 项服务层）
     ├── test-summarize.mjs      # 分句 / 关键词 / 主题分段自测
     ├── api-test.ps1            # 服务端接口测试（42 项）
-    ├── dom-app-test.mjs        # 前端集成测试（DOM 影子层，152 项）
+    ├── dom-app-test.mjs        # 前端集成测试（DOM 影子层，185 项）
     ├── test-integrations.mjs   # 云端转写 / 大模型代理测试（38 项；含思考型模型自动压推理）
     ├── test-storage.mjs        # 存储位置（换盘 / 改回默认 / 打开文件夹，45 项）
     ├── test-lan.mjs            # 手机访问开关（默认关、关着 403、开了放行、外机关不了，25 项）
@@ -402,7 +417,7 @@ lecture-notes/
     └── shots/                  # 真实浏览器截图（桌面 / 手机 / 设置）
 ```
 
-测试总计 **39 项**（离线 24 + 服务层 15），跑一遍约 **380 秒**（实测在 305~410 秒之间浮动，看机器忙不忙）。其中 `check-quality-baseline.mjs` 在录音被重新转过之后会自己跳过并提示「旧基线作废」，属正常，不是失败。加上需要额外环境的 4 项（真本地大模型 / 真云端 Key / 真显卡）和 4 项真浏览器 CDP 探针，`tests/` 下现有 73 个脚本。
+测试总计 **43 项**（离线 27 + 服务层 16），跑一遍约 **355 秒**（实测 330~390 秒浮动，看机器忙不忙）。其中 `check-quality-baseline.mjs` 在录音被重新转过之后会自己跳过并提示「旧基线作废」，`probe-chapters.mjs` 在本地大模型没跑时会自己放弃 —— 这两种跳过都属正常，不是失败。加上需要额外环境的 4 项（真本地大模型 / 真云端 Key / 真显卡）和 4 项真浏览器 CDP 探针，`tests/` 下现有 75 个脚本。
 
 本地大模型的东西在项目外面，单独放：
 

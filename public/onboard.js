@@ -566,17 +566,17 @@ export function createOnboard({ state, onDone, onQuit }) {
 
     const tabs = el('div', { class: 'tabs agree-tabs' });
     const pre = el('pre', { class: 'agree-text onboard-agree-text' });
-    let which = 'license';
+    let which = 'agreement';
     const show = (w) => {
       which = w;
-      tabs.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0) === (w === 'license')));
-      pre.textContent = text[w] || '（没读到正文，安装目录里的 LICENSE.txt / PRIVACY.txt 可以直接打开看）';
+      tabs.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0) === (w === 'agreement')));
+      pre.textContent = text[w] || '（没读到正文，安装目录里的 AGREEMENT.txt / PRIVACY.txt 可以直接打开看）';
       pre.scrollTop = 0;
       ui.agreeScrolled = false;
       syncAgree();
     };
     tabs.append(
-      el('button', { class: 'tab active', type: 'button', text: '用户协议', onclick: () => show('license') }),
+      el('button', { class: 'tab active', type: 'button', text: '用户协议', onclick: () => show('agreement') }),
       el('button', { class: 'tab', type: 'button', text: '隐私政策', onclick: () => show('privacy') })
     );
 
@@ -607,7 +607,7 @@ export function createOnboard({ state, onDone, onQuit }) {
     });
 
     wrap.append(tabs, pre, el('div', { class: 'onboard-progress' }, bar, pct), checkRow);
-    show('license');
+    show('agreement');
     // 内容短到不用滚时直接算读完。
     // 必须等两帧 + 确认 clientHeight > 0：弹窗刚 unhide 的那一刻 <pre> 还没布局，
     // clientHeight / scrollHeight 都是 0，会误判成「内容比框还短」直接放行 ——

@@ -63,8 +63,10 @@ ChangesAssociations=no
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\helpers\lecture-notes.ico
 ; 安装向导第一屏先给用户协议，必须点「我接受」才能继续（[Code] 里还有一道
-; 兜底检查）。协议正文与安装目录里的 LICENSE.txt 是同一个文件，不另维护一份。
-LicenseFile=stage\LICENSE.txt
+; 兜底检查）。协议正文与安装目录里的 AGREEMENT.txt 是同一个文件，不另维护一份。
+; AGPL-3.0 全文（stage\LICENSE）不放进安装向导 —— 开源协议不是「你签的合同」，
+; 用户拿到它就是他的权利，不需要点同意；它随软件装进安装目录，界面上也能看。
+LicenseFile=stage\AGREEMENT.txt
 ; 隐私政策放在「准备安装」那一屏前面，只读、不需要点同意 ——
 ; 但要让用户明确看见「录音会不会上传」这件事。
 InfoBeforeFile=stage\PRIVACY.txt
@@ -93,7 +95,8 @@ Source: "stage\更新.vbs";              DestDir: "{app}"; Flags: ignoreversion
 ; 说明文档
 Source: "stage\README.md";             DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "stage\docs\API接入教程.md";    DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "stage\LICENSE.txt";           DestDir: "{app}"; Flags: ignoreversion
+Source: "stage\AGREEMENT.txt";         DestDir: "{app}"; Flags: ignoreversion
+Source: "stage\LICENSE";               DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\PRIVACY.txt";           DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]

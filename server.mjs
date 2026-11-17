@@ -158,8 +158,13 @@ const VERSION = '0.9.0';
  * 老用户就永远不会被重新问一次，这在合规上是硬伤。
  * 这里改成「两个文件内容各算一个短哈希拼起来」，条款动一个字版本就变，
  * 动不了字就一模一样，不会因为重新打包、换行符而误伤老用户。
+ *
+ * 2026-11-17 起 key 叫 agreement 不叫 license：LICENSE.txt 那份专有 EULA
+ * 拆成了 AGREEMENT.txt（本协议，还要用户点同意）+ LICENSE（AGPL-3.0 全文，
+ * 不用点同意，开源协议不是「你签的合同」）。key 名字不改的话，界面上
+ * 「用户协议」那个标签页读到的会是一整篇 AGPL 英文原文。
  */
-const AGREE_FILES = { license: 'LICENSE.txt', privacy: 'PRIVACY.txt' };
+const AGREE_FILES = { agreement: 'AGREEMENT.txt', privacy: 'PRIVACY.txt' };
 const AGREE_VERSION = (() => {
   const h = createHash('sha256');
   for (const name of Object.values(AGREE_FILES)) {

@@ -70,9 +70,15 @@ try {
 }
 ok('接口可用', r1.ok === true);
 ok('带协议版本号', typeof r1.version === 'string' && r1.version.length >= 8, `version=${r1.version}`);
-ok('本机能看到协议全文', typeof r1.text?.license === 'string' && r1.text.license.length > 500);
+ok('本机能看到协议全文', typeof r1.text?.agreement === 'string' && r1.text.agreement.length > 500);
 ok('本机能看到隐私政策全文', typeof r1.text?.privacy === 'string' && r1.text.privacy.length > 500);
-ok('正文里有「讲义笔记」', /\u8bb2\u4e49\u7b14\u8bb0/.test(r1.text.license));
+ok('正文里有「讲义笔记」', /\u8bb2\u4e49\u7b14\u8bb0/.test(r1.text.agreement));
+// 2026-11-17 换成 AGPL-3.0 开源：协议正文里必须写明许可，用户才知道自己拿到的是什么权利。
+ok('正文写明以 AGPL-3.0 发布', /AGPL-3\.0/.test(r1.text.agreement) && /GNU Affero/.test(r1.text.agreement));
+// 开源协议允许收费分发，老 EULA 里「不得转卖/不得反向工程」那些与 AGPL 冲突的条款必须消失，
+// 留着不只是装饰 —— 会让人误以为 fork 违法。
+ok('不再有与 AGPL 冲突的禁令', !/\u4e0d\u5f97[\s\S]{0,80}\u8f6c\u5356/.test(r1.text.agreement));
+ok('许可全文单独成文件', /\u5b8c\u6574\u8bb8\u53ef\u5168\u6587/.test(r1.text.agreement));
 
 /* ---------------- 2. 开启浏览器 ---------------- */
 const CHROME = findChrome();
