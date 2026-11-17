@@ -36,8 +36,10 @@ const TIMEOUT_MS = Number(val('--timeout', '180000'));
 
 /* ---------------- 分组 ---------------- */
 
-// 离线层：不联网、不起服务、不读外部模型，纯逻辑 + 文件解析。
+// 离线层：不联网、不读外部模型，纯逻辑 + 文件解析。
 // 这些挂了就是真挂了，没有任何借口。
+// （test-port-reuse 会自己起几个一次性服务来验端口撞车，但用临时数据目录、
+//   跑完自己收拾干净，不依赖外面有没有服务在跑，所以放在这一层。）
 const OFFLINE = [
   ['syntax-check.mjs', '全部源文件语法 + 结构自检'],
   ['check-ui-ids.mjs', 'index.html 与 app.js 的 id 对得上'],
@@ -66,6 +68,7 @@ const OFFLINE = [
   ['test-providers.mjs', '各家转写/大模型服务商的参数拼装'],
   ['test-worker-device-fallback.mjs', '显卡不可用时的回退'],
   ['test-vram-autofree.mjs', '转写前自动腾显存'],
+  ['test-port-reuse.mjs', '端口撞车先认人：是我自己的就复用，是别人的才换（换了模型缓存就废）'],
 ];
 
 // 服务层：要一个活着的后端。

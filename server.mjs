@@ -652,7 +652,45 @@ function cookieHasEntry(req) {
  * 进程退出时删掉，这样「服务还在不在」一目了然。
  */
 const RUNTIME_FILE = path.join(DATA_DIR, 'runtime.json');
+async function clearRuntime() {
+  try {
+    const cur = parseJsonText(await fsp.readFile(RUNTIME_FILE, 'utf8'));
+    // 只删自己的，别把刚启动的新进程的文件删了
+    if (cur && cur.pid === process.pid) await fsp.rm(RUNTIME_FILE, { force: true });
+  } catch {}
+}
+
+/**
+ * 这个文件是「启动器该打开哪个地址」的唯一真相，所以**不能随便覆盖**。
+ *
+ * 踩过的坑：用户在已经有一个实例（23169）跑着的时候又双击了一次启动，
+ * 新进程把自己算出来的 23455 写进去，于是 runtime.json 指向 23455；那个
+ * 新进程随后退出了，文件却留了下来（它退出时只删「pid 是自己」的文件，
+ * 而文件里的 pid 这时已经不是它了）。下一次启动照着 23455 去问，问不到，
+ * 就当成「没人在跑」又起一个 —— 用户于是有两套浏览器缓存。
+ *
+ * 所以：文件里那个人还活着、还确实是本程序（probeSelf 认过），就不动它。
+ * 返回 { conflict: 端口 } 让调用方决定要不要提示。
+ */
 async function writeRuntime() {
+  let prev = null;
+  try {
+    prev = parseJsonText(await fsp.readFile(RUNTIME_FILE, 'utf8'));
+  } catch {
+    /* 第一次启动，没有这个文件 */
+  }
+  if (prev && Number(prev.pid) > 0 && Number(prev.pid) !== process.pid) {
+    let alive = false;
+    try {
+      process.kill(Number(prev.pid), 0);
+      alive = true;
+    } catch {
+      alive = false;
+    }
+    if (alive && (await probeSelf(Number(prev.port)))) {
+      return { conflict: Number(prev.port) };
+    }
+  }
   const info = {
     pid: process.pid,
     port: PORT,
@@ -669,13 +707,6 @@ async function writeRuntime() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
   await fsp.writeFile(RUNTIME_FILE, JSON.stringify(info, null, 2), 'utf8');
   return info;
-}
-async function clearRuntime() {
-  try {
-    const cur = parseJsonText(await fsp.readFile(RUNTIME_FILE, 'utf8'));
-    // 只删自己的，别把刚启动的新进程的文件删了
-    if (cur && cur.pid === process.pid) await fsp.rm(RUNTIME_FILE, { force: true });
-  } catch {}
 }
 
 /* --------------------------------- 配置 ---------------------------------- */
@@ -3215,10 +3246,62 @@ if (vaultChanged || labelsChanged) await saveConfig({}).catch(() => {});
 // 这样两台电脑上装同一份程序，端口天然不一样，不会互相串台。
 if (!PORT_FIXED) PORT = instance.port;
 
-// 随机端口也可能撞上别的软件。撞了就换一个再试，并把新端口记进 instance.json，
-// 这样用户下次打开还是同一个地址（地址变了书签就失效，体验很差）。
-function listenOnce(port) {
-  return new Promise((resolve, reject) => {
+/**
+ * 问一句「这个端口上是不是我自己」。
+ *
+ * 2026-11-16 之前的做法是：撞 EADDRINUSE 就随机换一个端口，并把新端口**写回
+ * instance.json**。这条「自动避让」看起来贴心，实际是个坑：
+ *
+ *   ① 浏览器把本地转写模型缓存在 Cache Storage 里，而 Cache Storage 是**按 origin
+ *      （协议 + 主机 + 端口）隔离**的。端口一变，1.6 GB 的模型缓存立刻变孤儿，
+ *      用户看到的就是「我明明下过模型，怎么每次转写都要重新下」。
+ *   ② 连点两次 start.cmd 就会起两个进程，第二个把自己改成新端口 —— 而第一个
+ *      还好好活着。于是同一台机器上出现两个实例，各占一个端口、各有一份浏览器
+ *      缓存，用户完全不知道自己在用哪一个。
+ *   ③ 地址变了，手机上存的局域网书签也失效。
+ *
+ * 所以改成：先问那个端口上是不是我自己的服务。`/api/health` 对局域网和本机都
+ * 放行（启动器也是靠它认人的），里面只回版本号和端口，不含任何用户数据 ——
+ * 拿它做身份确认正合适。是我就干脆不再监听（等同复用那个实例），直接退出让
+ * 用户去连已经在跑的那个；不是我（版本号对不上 / 不是这个程序）才换端口。
+ */
+function probeSelf(port, timeoutMs = 1200) {
+  return new Promise((resolve) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path: '/api/health', method: 'GET', timeout: timeoutMs },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          try {
+            const j = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            // 认人三件套：ok + 版本号 + 端口号，三个都对才认。
+            if (!(j && j.ok === true && typeof j.version === 'string' && Number(j.port) === Number(port))) {
+              return resolve(false);
+            }
+            // 还要看数据目录 —— /api/health 只对回环地址吐 dataDir。
+            // 端口上坐着的可能是「同一台机器上的另一份安装」，数据不在一起；
+            // 那种情况不能复用（用户会以为自己打开的是这份拷贝的录音）。
+            if (typeof j.dataDir === 'string' && j.dataDir && path.resolve(j.dataDir) !== path.resolve(DATA_DIR)) {
+              return resolve(false);
+            }
+            resolve(true);
+          } catch {
+            resolve(false);
+          }
+        });
+        res.on('error', () => resolve(false));
+      }
+    );
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve(false));
+    req.end();
+  });
+}
+
+// 随机端口也可能撞上别的软件。撞了先看是不是自己的另一个实例（见 probeSelf 的注释），
+// 不是自己才换一个再试，并把新端口记进 instance.json。
+function listenOnce(port) {  return new Promise((resolve, reject) => {
     const onErr = (e) => {
       server.removeListener('listening', onOk);
       reject(e);
@@ -3233,7 +3316,59 @@ function listenOnce(port) {
   });
 }
 
+/**
+ * 数据目录里已经有本程序在跑了吗？是的话返回它的端口，否则 0。
+ *
+ * 这一步必须在「挑端口」之前做，因为 instance.json 里的端口和真正在跑的端口
+ * 可能早就不是一个了（历史遗留的自动避让把 instance 改成过新端口，而老进程
+ * 还占着原来的）。那种情况下光靠 EADDRINUSE 是发现不了的：新端口空着，服务
+ * 就高高兴兴起来了 —— 于是同一份数据目录上跑着两个实例，各有一份浏览器缓存，
+ * 用户完全不知道自己连的是哪个。
+ *
+ * 两条线索都试：
+ *   1) runtime.json —— 服务每次启动成功都会写，进程退出会删；
+ *   2) instance.json 里记的端口 —— 启动成功时也会同步成实际端口（见下方
+ *      「记住这次真正用的端口」），所以它通常也是准的。runtime.json 被后来的
+ *      进程覆盖掉、或者干脆丢了的时候，这条就是唯一的线索。
+ */
+async function findRunningSelf() {
+  // 先按 runtime.json 找（最准，还带 pid）
+  let rt = null;
+  try {
+    rt = parseJsonText(await fsp.readFile(RUNTIME_FILE, 'utf8'));
+  } catch {
+    /* 没在跑，或者被删了 */
+  }
+  const rtPort = Number(rt?.port) || 0;
+  if (rtPort && Number(rt?.pid) > 0) {
+    let alive = false;
+    try {
+      process.kill(Number(rt.pid), 0);
+      alive = true;
+    } catch {
+      alive = false;
+    }
+    if (alive && (await probeSelf(rtPort))) return rtPort;
+  }
+  // 退一步：instance.json 记的端口上是不是我自己
+  const instPort = Number(instance?.port) || 0;
+  if (instPort && instPort !== rtPort && (await probeSelf(instPort))) return instPort;
+  return 0;
+}
+
 async function startServer() {
+  // 先问「是不是已经有一个我在跑了」。找到了就直接让路，不抢端口、不改任何文件。
+  if (!PORT_FIXED) {
+    const running = await findRunningSelf();
+    if (running) {
+      console.log('');
+      console.log(`   已经有本程序在 ${running} 端口跑着了（数据目录：${DATA_DIR}）。`);
+      console.log(`   直接打开： http://127.0.0.1:${running}${entryPrefix()}`);
+      console.log('   （确实要再起一个，用 --port 指定另一个端口，或换 --data。）');
+      console.log('');
+      process.exit(0);
+    }
+  }
   let port = PORT;
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
@@ -3245,6 +3380,17 @@ async function startServer() {
       if (PORT_FIXED) {
         console.error(`\n[错误] 端口 ${port} 已被占用。换一个端口：  node server.mjs --port ${port + 1}\n`);
         process.exit(1);
+      }
+      // 占着这个端口的是不是我自己？（同一台机器上点了两次启动、或者上一个
+      // 进程还没退干净）。是的话就不要再起第二个：两个实例各占一个端口，
+      // 浏览器缓存会按 origin 分裂，用户会以为是「每次都要重新下模型」。
+      if (await probeSelf(port)) {
+        console.log('');
+        console.log(`   已经有本程序在 ${port} 端口跑着了，这次不再重复启动。`);
+        console.log(`   直接打开： http://127.0.0.1:${port}${entryPrefix()}`);
+        console.log('   （想强制再起一个，用 --port 指定另一个端口。）');
+        console.log('');
+        process.exit(0);
       }
       // 换个没人用的端口，并把它变成这台电脑以后固定的端口
       port = 20000 + (randomBytes(2).readUInt16BE(0) % 20000);
@@ -3288,8 +3434,17 @@ console.log('');
 console.log('   数据目录： ' + DATA_DIR);
 console.log('   停止服务： Ctrl + C');
 console.log('');
-// 告诉启动器「我在哪个端口、钥匙是什么」，它照着开浏览器就行
-await writeRuntime().catch(() => {});
+// 告诉启动器「我在哪个端口、钥匙是什么」，它照着开浏览器就行。
+// 如果返回 conflict，说明数据目录里另外那个实例还活着 —— 文件不动它，
+// 免得把启动器指到「已经退出的端口」上去（见 writeRuntime 的注释）。
+const rt = await writeRuntime().catch(() => null);
+if (rt && rt.conflict) {
+  console.log('');
+  console.log(`   [注意] 数据目录里已经有本程序在 ${rt.conflict} 端口跑着，runtime.json 没动。`);
+  console.log('   这个新实例用的是别的端口，浏览器缓存不会共享 ——');
+  console.log('   建议关掉这个，直接用已经在跑的那个。');
+  console.log('');
+}
 
 // 退出时清掉 runtime.json，这样启动器一眼就知道服务还在不在
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -3298,8 +3453,13 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.exit(0);
   });
 }
+// 这条路是「没走上面三个信号、直接退出」的兜底（未捕获异常、process.exit(0) 等）。
+// 必须验一下 pid：曾经见过同一份数据上跑着两个实例，后来那个把自己起不来的进程
+// 一退出就把先来那个的 runtime.json 删了，于是启动器以为服务没了、又拉一个起来。
+// exit 钩子里不能 await，所以这里同步读一次，只删自己的。
 process.on('exit', () => {
   try {
-    fs.rmSync(RUNTIME_FILE, { force: true });
+    const cur = JSON.parse(fs.readFileSync(RUNTIME_FILE, 'utf8'));
+    if (cur && Number(cur.pid) === process.pid) fs.rmSync(RUNTIME_FILE, { force: true });
   } catch {}
 });
