@@ -569,7 +569,7 @@ powershell -ExecutionPolicy Bypass -File helpers\setup-local-llm.ps1 -AiHome D:\
 - 进度条显示「模型已就绪（**显卡加速**）」= 走 WebGPU，大约 5–15 分钟/小时录音；
 - 显示「（**CPU，会很慢**）」= 退回 WASM，实测比实时还慢约 4 倍，一小时录音要几个小时。
 
-CPU 模式下请改用云端转写，或在设置里换更小的模型（`Xenova/whisper-base` / `tiny`）。
+CPU 模式下请改用云端转写，或在设置里换更小的模型（`onnx-community/whisper-tiny`）。
 另外超过 45 分钟的录音，点「开始转写」时会先弹一次确认，告诉你大概要等多久，不会再出现「看起来卡死其实在跑」的情况。
 
 ### 其它

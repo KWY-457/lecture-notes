@@ -19,7 +19,9 @@
 <script type="module">
 const params = new URLSearchParams(location.search);
 const CFG = {
-  model: params.get('model') || 'Xenova/whisper-tiny',
+  // 默认用产品自己那四档所在的 org（onnx-community）。以前是 Xenova/whisper-tiny，
+  // 那个 org 的缓存已经没人用了，删掉之后这里再指过去就会重新下一遍。
+  model: params.get('model') || 'onnx-community/whisper-tiny',
   device: params.get('device') || 'wasm',   // 无头环境没有显卡，强制 CPU 后端
   cdn: 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3',
   modelHost: 'https://hf-mirror.com/',
