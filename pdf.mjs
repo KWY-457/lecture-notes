@@ -126,7 +126,8 @@ a.ts { color: #6a737d; font-family: Consolas, monospace; font-size: .92em; }
      写成负 em 是拿块底部在挪，分数越高沉得越深。 */
   vertical-align: middle; margin: 0 .18em; line-height: 1.16; font-size: .96em;
 }
-.tex-frac > .tex-den { border-top: 1px solid currentColor; }
+.tex-frac > .tex-num { padding: 0 .22em; }
+.tex-frac > .tex-den { padding: 0 .22em; border-top: 1px solid currentColor; }
 .tex-frac-mixed > .tex-den { border-top: 1px solid currentColor; }
 .tex-sqrt { display: inline-flex; align-items: flex-start; vertical-align: middle; }
 .tex-sqrt > .tex-radicand { border-top: 1px solid currentColor; padding: .05em .12em 0; }

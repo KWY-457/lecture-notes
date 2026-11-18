@@ -8,6 +8,7 @@
  */
 
 import { renderTex, hasTex } from './tex.js';
+import { findBareMath } from './math.js';
 
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -142,7 +143,7 @@ const TEX_RE = /\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]+?)\$\$|\$([^$\
 const looksMath = (s) => /[\\^_{}]/.test(s);
 
 /** 不含公式的纯文本行内处理（原来的逻辑，原样搬过来） */
-function inlinePlain(text) {
+function inlineMd(text) {
   let s = esc(text);
   // 行内代码
   s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
@@ -159,6 +160,30 @@ function inlinePlain(text) {
     return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
   return s;
+}
+
+/**
+ * 纯文本行内处理，外加「裸文本公式」识别。
+ *
+ * 模型（本地 14B、云端都算）写公式时经常不用 LaTeX，直接写 `y = x^2 + 1`、
+ * `x^2/16 + y^2/9 - 1 = 0` —— 老笔记里这种写法占绝大多数（8 份笔记里 LaTeX 定界符命中 0）。
+ * 这里把这种片段挑出来交给 tex.js 排成分数、上标，剩下照原样走 Markdown。
+ * 识别规则在 public/math.js，原则是「宁可不认，不能认错」。
+ */
+function inlinePlain(text) {
+  const src = String(text ?? '');
+  if (!/[/^]/.test(src)) return inlineMd(src); // 快路径：连斜杠和 ^ 都没有
+  const hits = findBareMath(src);
+  if (!hits.length) return inlineMd(src);
+  let out = '';
+  let last = 0;
+  for (const h of hits) {
+    if (h.start > last) out += inlineMd(src.slice(last, h.start));
+    out += renderTex(h.tex);
+    last = h.end;
+  }
+  if (last < src.length) out += inlineMd(src.slice(last));
+  return out;
 }
 
 function inline(text) {
