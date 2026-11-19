@@ -90,6 +90,7 @@ const SERVER = [
   ['test-agreement.mjs', '用户协议 / 隐私政策（会真的点一次同意，别指着正式数据跑）'],
   ['test-config-guard.mjs', '测试跑完必须把 data/config.json 原样还回去'],
   ['test-donate.mjs', '打赏弹窗（自起临时服务，不碰正式数据）'],
+  ['test-whatsnew.mjs', '更新公告弹窗：只在版本变了时弹一次、点知道了写回、手动入口不改记忆（自起临时服务）'],
   ['test-keyvault.mjs', 'API Key 清单：落盘、重启、本机明文 / 局域网掩码、删除'],
   ['test-storage.mjs', '存储位置：拒绝坏路径、迁移只复制不删源、改回默认、局域网 403'],
   ['test-lan.mjs', '手机访问开关：默认关、关着时局域网 403、开了放行、外机关不了'],

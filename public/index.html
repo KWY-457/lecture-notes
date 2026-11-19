@@ -468,6 +468,7 @@
           <button type="button" class="linklike" id="btn-check-update">检查更新</button>
           <button type="button" class="linklike" id="btn-show-license">用户协议</button>
           <button type="button" class="linklike" id="btn-show-privacy">隐私政策</button>
+          <button type="button" class="linklike" id="btn-show-changelog">更新记录</button>
           <span class="hint" id="about-agree"></span>
         </div>
         <!-- 更新区默认整块隐藏：没查到新版时不占地方。
@@ -593,6 +594,23 @@
       <input id="faq-search" type="search" placeholder="搜报错原文或问题，比如 401、备份、时间戳" autocomplete="off">
     </div>
     <div class="settings-body help-body" id="faq-body"></div>
+  </div>
+</div>
+
+<!-- ============ 更新公告（更新后才弹一次） ============ -->
+<div class="modal" id="whatsnew-modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3><svg class="i"><use href="#i-book"/></svg>这次更新了什么 <span class="hint" id="whatsnew-version"></span></h3>
+      <button class="icon-btn" id="btn-whatsnew-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="settings-body help-body" id="whatsnew-body"></div>
+    <div class="modal-foot">
+      <span class="hint">更新记录也会一直留在「设置 → ⑤ 关于与协议 → 更新记录」里，随时能回看。</span>
+      <div class="modal-actions" style="margin:0">
+        <button class="btn primary" id="btn-whatsnew-ok">知道了</button>
+      </div>
+    </div>
   </div>
 </div>
 

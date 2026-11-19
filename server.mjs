@@ -251,6 +251,24 @@ function shouldShowDonate(seenBootId) {
   return true;
 }
 
+/**
+ * 更新公告该不该弹：记忆里看过的版本跟当前版本对不上就弹。
+ * 新装时 loadConfig() 会把 seenVersion 初始化成当前版本，所以第一次打开不打扰。
+ * 弹过之后前端 POST 写回当前版本，刷新、重启都不再弹，直到下次真的升级。
+ */
+function shouldShowWhatsNew() {
+  return (config.whatsNew?.seenVersion || '') !== VERSION;
+}
+
+/** 更新公告正文：安装目录里的 CHANGELOG.md（跟程序一起发，改文案不用动代码）。 */
+async function readChangelog() {
+  try {
+    return await fsp.readFile(path.join(__dirname, 'CHANGELOG.md'), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
 /** 收款码有没有放。放的是 .jpg 还是 .png 都认，界面自己会按同名字找。 */
 function donateCodesPresent() {
   const dir = path.join(__dirname, 'public', 'donate');
@@ -430,6 +448,20 @@ const DEFAULT_CONFIG = {
     lastCheckAt: '',
     lastVersion: '',
     ignoredVersion: '',
+  },
+  /**
+   * 更新公告弹窗的记忆。
+   *
+   * 老大要求：「只在更新后弹一次，展示更新内容或 bug 修复，让用户直观看到变化」。
+   * 做法：记下「用户已经看过哪一版」的公告，跟当前 VERSION 对不上就弹。
+   *   - 新装：初始化时就写成当前版本 → 第一次打开不打扰（那时有新手引导）
+   *   - 老用户升级：config 里没有这个字段，deepMerge 补成空串 → 弹一次
+   *   - 弹过之后 POST 一次写回当前版本 → 刷新、重启都不再弹，直到下次真更新
+   * 为什么存服务端不存 localStorage：跟协议/打赏一个道理，同一台机器多个浏览器
+   * 打开的是同一个服务，不该每个浏览器各弹一遍。
+   */
+  whatsNew: {
+    seenVersion: '',
   },
 };
 
@@ -730,6 +762,10 @@ async function readConfigFile() {
     // 文件不存在 = 第一次运行，安静地用默认值即可。
     if (!raw) {
       config = structuredClone(DEFAULT_CONFIG);
+      // 新装：更新公告记成「已看过当前版」，第一次打开不弹（那时有新手引导）。
+      // 老用户升级时 config.json 已存在、没有这个字段，deepMerge 补成空串 → 会弹一次。
+      config.whatsNew.seenVersion = VERSION;
+      await saveConfig({}).catch(() => {});
       return;
     }
     // 文件在但读不出来（被手动编辑坏、断电写一半、存成了别的编码）：
@@ -2268,6 +2304,28 @@ async function handleApi(req, res, u) {
         hideOnStartup: !!config.donate?.hideOnStartup,
         lastShownAt: config.donate?.lastShownAt || '',
       });
+    }
+    return fail(res, 405, '方法不支持');
+  }
+
+  // 更新公告弹窗：更新后才弹一次，展示 CHANGELOG.md 里这次改了什么。
+  // GET 问「该不该弹 + 正文」，POST 在用户关窗后把当前版本写回 seenVersion。
+  // 手机上不弹（跟打赏一个道理，那是给电脑用户看的），但 GET 照常给数据，
+  // 免得以后想在手机上看更新记录时还要另开接口。
+  if (p === '/whats-new') {
+    if (req.method === 'GET') {
+      return json(res, 200, {
+        ok: true,
+        show: shouldShowWhatsNew() && isLoopback(req),
+        version: VERSION,
+        seenVersion: config.whatsNew?.seenVersion || '',
+        markdown: await readChangelog(),
+      });
+    }
+    if (req.method === 'POST' || req.method === 'PUT') {
+      if (!isLoopback(req)) return fail(res, 403, '只允许在本机标记更新公告已读');
+      await saveConfig({ whatsNew: { seenVersion: VERSION } });
+      return json(res, 200, { ok: true, seenVersion: VERSION });
     }
     return fail(res, 405, '方法不支持');
   }

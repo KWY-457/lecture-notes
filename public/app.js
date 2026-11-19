@@ -31,6 +31,8 @@ const state = {
   agreement: null,
   // 打赏提醒：{hideOnStartup, bootId}。bootId 用来判断「这次打开是不是新一次启动」
   donate: null,
+  // 更新公告：{show, version, markdown}。只在版本变了时弹一次，正文是 CHANGELOG.md。
+  whatsNew: null,
   // /system 的一次快照：{lan, modelCache, storage:{lectures,models,dataDir}, ...}
   // 存储位置那一段（现在存哪、是不是默认、占多大）靠它渲染。
   sys: null,
@@ -2856,6 +2858,50 @@ async function findDonateImage(name) {
 }
 
 /**
+ * 打开更新公告窗。
+ * @param {boolean} auto true = 更新后自动弹（关窗要写回 seenVersion），
+ *                       false = 用户在设置里手动点开（只读，不改记忆）。
+ *
+ * 正文是安装目录里的 CHANGELOG.md，由服务端 /whats-new 读出来。
+ * 用 renderMarkdown 渲染，用户看到的是排好版的标题和列表，不是一堆 # 号。
+ */
+async function openWhatsNew(auto = false) {
+  const modal = $('whatsnew-modal');
+  const body = $('whatsnew-body');
+  modal.hidden = false;
+  modal.dataset.mode = auto ? 'auto' : 'manual';
+  $('whatsnew-version').textContent = state.whatsNew?.version ? `· ${state.whatsNew.version}` : '';
+
+  let md = state.whatsNew?.markdown;
+  if (!md) {
+    body.textContent = '正在读取更新记录…';
+    try {
+      const r = await api('/whats-new');
+      state.whatsNew = { ...(state.whatsNew || {}), ...r };
+      md = r.markdown;
+      if (r.version) $('whatsnew-version').textContent = `· ${r.version}`;
+    } catch (e) {
+      body.textContent = '更新记录读取失败：' + e.message + '。安装目录里的 CHANGELOG.md 可以直接打开看。';
+      return;
+    }
+  }
+  body.innerHTML = md ? renderMarkdown(md) : '<p class="hint">这次没有记录具体改动。</p>';
+
+  // 自动弹的那次，用户点「知道了」后写回 seenVersion —— 之后刷新、重启都不再弹。
+  if (auto) {
+    $('btn-whatsnew-ok').onclick = async () => {
+      modal.hidden = true;
+      try {
+        const r = await api('/whats-new', { method: 'POST' });
+        if (r?.seenVersion) state.whatsNew = { ...(state.whatsNew || {}), seenVersion: r.seenVersion };
+      } catch {}
+    };
+  } else {
+    $('btn-whatsnew-ok').onclick = () => (modal.hidden = true);
+  }
+}
+
+/**
  * 打开打赏窗。
  * @param {'auto'|'manual'} mode auto = 启动时自动弹，manual = 用户点进来的。
  *
@@ -3648,6 +3694,10 @@ function bind() {
   // 打赏：设置底部一个入口（想看才点），另外每次启动程序自动弹一次，
   // 勾了「以后不要再提示我」就不再自动弹。
   $('btn-show-donate').onclick = () => openDonate('manual');
+  // 更新公告：设置里手动看的入口（原来那个「更新记录」按钮一直没绑，这里顺手接上），
+  // 还有弹窗自己的关闭按钮。
+  $('btn-show-changelog').onclick = () => openWhatsNew(false);
+  $('btn-whatsnew-close').onclick = () => ($('whatsnew-modal').hidden = true);
   $('btn-donate-close').onclick = () => ($('donate-modal').hidden = true);
   $('btn-donate-later').onclick = () => ($('donate-modal').hidden = true);
   $('donate-never').onchange = async (e) => {
@@ -4148,10 +4198,32 @@ async function boot() {
     }
   }
 
-  // 打赏提示：每次启动程序弹一次。
-  // 协议弹窗已经在前面的话就跳过这次 —— 一次只弹一个窗，别一开程序糊两层。
-  // 刷页面、切标签不算新启动：靠服务端给的 bootId 判断（服务重启才会变）。
-  if (!agreementShown) maybeShowDonate();
+  // 更新公告：版本变了才弹一次，展示这次改了什么。
+  // 优先级排在协议之后、打赏之前 —— 一次只弹一个窗，别一开程序糊两层。
+  // 没得弹（新装 / 已经看过）才接着走打赏。
+  if (!agreementShown) maybeShowWhatsNew();
+}
+
+/**
+ * 启动时要不要弹更新公告。
+ * 判断全在服务端：config 里记的 seenVersion 跟当前版本对不上才弹，
+ * 点了「知道了」就写回、之后不再弹，直到下次真的升级。
+ * 没得弹时接着走原来的打赏流程。
+ */
+async function maybeShowWhatsNew() {
+  // 手机（局域网）上不弹更新公告：那是给电脑用户看的。
+  if (state.remote) return;
+  try {
+    const r = await api('/whats-new');
+    state.whatsNew = { ...(state.whatsNew || {}), ...r };
+    if (r.show) {
+      openWhatsNew(true);
+      return; // 弹了公告就不再叠打赏窗
+    }
+  } catch {
+    // 公告读不出来不影响用，静默退回打赏流程
+  }
+  maybeShowDonate();
 }
 
 /**

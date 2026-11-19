@@ -72,6 +72,7 @@ $Files = @(
     @{ From = 'update.mjs';            To = 'update.mjs' },
     @{ From = 'start.cmd';             To = 'start.cmd' },
     @{ From = 'README.md';             To = 'README.md' },
+    @{ From = 'CHANGELOG.md';          To = 'CHANGELOG.md' },
     @{ From = 'AGREEMENT.txt';         To = 'AGREEMENT.txt' },
     @{ From = 'LICENSE';               To = 'LICENSE' },
     @{ From = 'PRIVACY.txt';           To = 'PRIVACY.txt' }
@@ -192,7 +193,7 @@ Step '3/4 自检'
 # 3.1 必需文件齐全（和 .iss 里的 [Files] 一一对应）
 $Required = @(
     'server.mjs', 'docx.mjs', 'pdf.mjs', 'update.mjs', 'start.cmd', 'runtime\node.exe',
-    '启动.vbs', '停止.vbs', '更新.vbs', 'README.md', 'AGREEMENT.txt', 'LICENSE', 'PRIVACY.txt',
+    '启动.vbs', '停止.vbs', '更新.vbs', 'README.md', 'CHANGELOG.md', 'AGREEMENT.txt', 'LICENSE', 'PRIVACY.txt',
     'public\index.html', 'public\app.js', 'public\app.css',
     'public\transcript.js', 'public\note.js', 'public\summarize.js',
     'helpers\launcher-src.vbs', 'helpers\stop-src.vbs', 'helpers\update-src.vbs',

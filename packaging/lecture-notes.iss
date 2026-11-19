@@ -94,6 +94,7 @@ Source: "stage\停止.vbs";              DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\更新.vbs";              DestDir: "{app}"; Flags: ignoreversion
 ; 说明文档
 Source: "stage\README.md";             DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "stage\CHANGELOG.md";          DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\docs\API接入教程.md";    DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "stage\AGREEMENT.txt";         DestDir: "{app}"; Flags: ignoreversion
 Source: "stage\LICENSE";               DestDir: "{app}"; Flags: ignoreversion
