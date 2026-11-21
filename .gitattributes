@@ -1,0 +1,31 @@
+# 为什么这份文件这么短：
+#   本机 core.autocrlf=true，提交时已经把 CRLF 转成 LF 存进仓库了，
+#   所以这里不需要再写 `* text=auto eol=lf` —— 写了反而会让下一次
+#   commit 出现一堆「整个文件都变了」的假 diff（工作区是 CRLF、仓库里
+#   是 LF，重新规范化会把每个文件都标一遍）。
+#
+# 这里只声明两件 autocrlf 猜不出来的事：
+
+# 1) 二进制：别做换行转换，也别让 git 当文本 diff 去比
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.exe binary
+*.msi binary
+*.gguf binary
+*.onnx binary
+*.woff2 binary
+
+# 2) Windows 侧脚本：检出时必须还是 CRLF。
+#    cmd / VBScript 对纯 LF 的批处理不友好，这几个扩展名不能被统一成 LF。
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.vbs text eol=crlf
+*.ps1 text eol=crlf

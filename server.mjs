@@ -443,7 +443,7 @@ const DEFAULT_CONFIG = {
    */
   update: {
     enabled: true,
-    repo: 'lecture-notes/lecture-notes',
+    repo: 'KWY-457/lecture-notes',
     feedUrl: '',
     lastCheckAt: '',
     lastVersion: '',
