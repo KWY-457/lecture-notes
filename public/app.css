@@ -172,11 +172,24 @@ a { color: var(--brand); text-underline-offset: 2px; }
   border: 0; background: transparent; cursor: pointer; font-size: 17px;
   width: 34px; height: 34px; border-radius: var(--r-sm); color: var(--muted);
   transition: background .14s var(--ease), color .14s var(--ease);
+  position: relative;   /* 给 .icon-dot 当定位基准 */
 }
 .icon-btn:hover { background: var(--panel-2); color: var(--text); }
 .icon-btn:active { background: var(--panel-3); }
 .icon-btn.tiny { width: 26px; height: 26px; font-size: 13px; }
 .icon-btn.tiny .i { width: 14px; height: 14px; }
+/* 右上角那个小红点：只在「查到新版本、还没去看」时出现。
+   2026-11-21 改成启动时静默查更新 —— 查到新版不弹窗（软件是上课用的，
+   弹窗只会打断人），在设置按钮上挂个点，用户看到自然知道去哪儿看。
+   定位基准是上面 .icon-btn 的 position:relative。 */
+.icon-dot {
+  position: absolute; top: 5px; right: 5px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--panel);
+  pointer-events: none;
+}
+.icon-dot[hidden] { display: none; }
 .only-mobile { display: none; }
 /* 局域网来的（手机、另一台电脑）只留上传。
    ---------------------------------------------------------------

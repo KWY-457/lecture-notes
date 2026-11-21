@@ -97,6 +97,9 @@ const SERVER = [
   ['test-provider-migration.mjs', '老配置迁移：收掉的服务商并进 custom / local，Key 和自填项不动'],
   // 同一个脚本，给了地址就多跑 4 条接口防呆（外层 34 条纯逻辑在路上已经跑过一遍）
   ['test-update.mjs', '自动更新的四个接口：只认 loopback、下载不接外部地址、能忽略某版'],
+  // 要真浏览器：验「启动时静默查更新」不发请求挡路、失败静默、设置角上红点。
+  // 放服务层是因为它要打开真页面（and 要一个活着的后端），但它自己起 headless Chrome。
+  ['test-update-boot.mjs', '启动静默查更新：延后发、不挡首屏、失败静默、设置角上的红点'],
   ['test-integrations.mjs', '对外集成'],
 ];
 

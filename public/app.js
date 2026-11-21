@@ -2564,6 +2564,10 @@ async function openSettings() {
   renderAbout();
   $('settings-modal').hidden = false;
   runDiagnostics();
+  // 打开设置 = 用户已经看到「有新版本」这件事了，红点可以灭
+  // （但只有真查到版本号才记，没查到的时候不能把 seen 写脏）。
+  if (updateState.info?.latest) updateState.seen = updateState.info.latest;
+  syncSettingsDot();
   // 顺手查一次（silent）：服务端 6 小时节流，多数时候只是把上次结果取回来，
   // 一个请求都不发。失败也不打扰 —— 打开设置是为了改设置，不是来看报错的。
   checkUpdate({ silent: true }).catch(() => {});
@@ -2586,7 +2590,28 @@ const updateState = {
   busy: '',          // '' | 'checking' | 'downloading' | 'installing'
   info: null,        // 最后一次 /update/check 的结果
   downloaded: null,  // { name, sizeText, version }
+  seen: '',          // 用户已经在设置里看过这个版本号了；跟 latest 一样就不亮红点
 };
+
+/**
+ * 同步右上角那个小红点。
+ *
+ * 什么时候亮：查到新版本、而且用户还没在设置里看过它。
+ * 什么时候灭：没新版本 / 看过这次 / 正在装。
+ *
+ * 单独抽成函数是因为它有两个调用点：checkUpdate 查完一次、以及用户打开设置时。
+ * 写死在里面的话，打开设置后红点要等到下次查询才灭，看着像坏了。
+ */
+function syncSettingsDot() {
+  const dot = $('settings-dot');
+  const btn = $('btn-settings');
+  if (!dot || !btn) return;
+  const latest = updateState.info?.latest || updateState.downloaded?.version || '';
+  const seen = updateState.seen === latest && latest !== '';
+  const show = !seen && !!(updateState.info?.hasUpdate || updateState.downloaded);
+  dot.hidden = !show;
+  btn.title = show && latest ? `设置（有新版本 ${latest}）` : '设置';
+}
 
 /** 把跑着的任务画到按钮和状态行上。界面永远能看出「现在在干嘛」。 */
 function renderUpdateBox() {
@@ -2672,7 +2697,34 @@ async function checkUpdate({ silent = false, force = false } = {}) {
     updateState.busy = '';
     $('btn-check-update').textContent = '检查更新';
     renderUpdateBox();
+    // 设置按钮角上那个小红点：查到了新版本才亮，点进设置看过就灭。
+    // silent 也照样亮 —— 启动时那次就是靠它告诉用户「有新东西」的。
+    syncSettingsDot();
   }
+}
+
+/**
+ * 启动时静默查一次更新（2026-11-21 老大要求「改成启动自动检查」）。
+ *
+ * 为什么不在 boot() 里直接写 checkUpdate：
+ *   1. 这一步要联网，而这个软件的卖点是「不联网也能用」—— 所以绝不能挡在
+ *      boot 的必经路径上，也不能因为失败在界面上冒出任何东西；
+ *   2. boot 里那一刻 updateState 还是空的，界面元素也没全绑好；
+ *   3. 放到 boot 末尾 + setTimeout，让列表、笔记这些先画出来，用户感知不到。
+ *
+ * 服务端 /update/check 本身有 6 小时节流（update.mjs 的 shouldCheck），
+ * 所以开机连点几次程序也不会真的反复打 GitHub。
+ * 查询失败（没网、GitHub 被墙、还没发过 Release 返回 404）全当「没有更新」，
+ * 连 console 都不打 —— 用户不该为一次后台检查和任何提示打交道。
+ */
+function checkUpdateOnBoot() {
+  // 手机上不查：手机端只是传录音的入口，装配更新要在那台电脑上做。
+  if (state.remote) return;
+  // 引导还没走完的机器也不查：那时候用户连引擎都没选，弹个「有新版本」没意义。
+  if (state.config?.onboard && state.config.onboard.done === false) return;
+  setTimeout(() => {
+    checkUpdate({ silent: true }).catch(() => {});
+  }, 2500);
 }
 
 /** 下载 + 装。分两步是给「下载失败但已下过」留余地：重试只补没做到的那步。 */
@@ -4156,6 +4208,12 @@ async function boot() {
   await loadLectures().catch((e) => toast('读取列表失败：' + e.message, 'err'));
 
   await openFromHash();
+
+  // 启动时静默查一次更新（老大 2026-11-21 要求）。
+  // 放在这里而不是最末尾：末尾有一条「走新手引导就 return」的早退分支，
+  // 放在末尾会让第一次装的人永远等不到这次检查。函数内部自己判条件，
+  // 且是 setTimeout 延后 2.5 秒才发请求 —— 不挡任何渲染、失败一声不吭。
+  checkUpdateOnBoot();
 
   // ── 新手引导 ──
   // 第一次装的人先走一遍：选引擎 → 填 Key 或选模型 → 看协议。
