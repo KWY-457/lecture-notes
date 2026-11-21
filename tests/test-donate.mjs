@@ -239,7 +239,7 @@ async function main() {
   check('两张收款码都在', s1.imgs.length === 2, s1.imgs.map((i) => i.src).join(', '));
   check('两张都真的加载出来了', s1.imgs.every((i) => i.loaded) === true);
   check('按 220px 显示（够扫）', s1.imgs.every((i) => i.w >= 200) === true, s1.imgs.map((i) => i.w + 'px').join(', '));
-  check('标题是「请人家喝杯奶茶」', /奶茶/.test(s1.headline), s1.headline);
+  check('标题是「赞助作者！」', /赞助作者/.test(s1.headline), s1.headline);
 
   console.log('\n【2】叉掉且不勾 → 重新启动还弹');
   check(

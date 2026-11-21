@@ -504,7 +504,7 @@
       <div>
         <!-- 打赏入口放在这排按钮里，不放在滚动的设置正文里 ——
              正文滚到底才看得见，等于藏起来了；这一排永远固定在最底部。 -->
-        <button class="btn ghost tiny" id="btn-show-donate" title="觉得好用的话，可以请人家喝杯奶茶"><svg class="i sm"><use href="#i-coffee"/></svg>请人家喝奶茶</button>
+        <button class="btn ghost tiny" id="btn-show-donate" title="觉得好用的话，赞助一下作者"><svg class="i sm"><use href="#i-coffee"/></svg>赞助作者！</button>
         <button class="btn ghost tiny danger" id="btn-shutdown" title="关闭后台服务（关掉整个程序）"><svg class="i sm"><use href="#i-x"/></svg>退出服务</button>
         <button class="btn ghost" id="btn-settings-cancel">取消</button>
         <button class="btn primary" id="btn-settings-save">保存</button>
@@ -556,23 +556,22 @@
 
   这个弹窗有两个出处：
     · 每次启动程序时自动弹一次（没勾「不再提示」的话）
-    · 设置底部「请人家喝奶茶」按钮，想看才点
+    · 设置底部「赞助作者！」按钮，想看才点
   自动弹的时候把「下次再说」写成「先看看别处」，手动打开时那句不显示。
 -->
 <!-- ============ 打赏 ============ -->
 <div class="modal phone-hide" id="donate-modal" hidden>
   <div class="modal-card">
     <div class="modal-head">
-      <h3><svg class="i"><use href="#i-coffee"/></svg>请人家喝杯奶茶</h3>
+      <h3><svg class="i"><use href="#i-coffee"/></svg>赞助作者！</h3>
       <button class="icon-btn" id="btn-donate-close" title="关闭"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
     <div class="settings-body">
       <p class="hint">
         这个软件是免费的，也没有登录、不传你的录音。
-        如果它真的帮你省下了抄笔记的时间，可以请人家喝杯奶茶 —— 不打赏也照样能用，一点功能都不会少。
+        如果它真的帮你省下了抄笔记的时间，不妨赞助一下作者（磕头跪谢）—— 不打赏也照样能用，一点功能都不会少。
       </p>
       <div class="donate-codes" id="donate-codes"></div>
-      <p class="hint">米饭管饱，奶茶是加餐</p>
       <label class="donate-opt">
         <input type="checkbox" id="donate-never" />
         <span>以后不要再提示我</span>
