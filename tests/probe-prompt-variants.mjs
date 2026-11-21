@@ -178,7 +178,7 @@ for (const r of rows) {
 }
 const best = rows.slice().sort((a, b) => b.logicChars - a.logicChars)[0];
 console.log(`\n最长「理解脉络」：${best.v}（${best.logicChars} 字）`);
-console.log('提醒：改提示词措辞对此项收益有限，别指望靠"再写狠一点"突破 —— 详见 docs/quality-report.md §5.4');
+console.log('提醒：改提示词措辞对此项收益有限，别指望靠"再写狠一点"突破 —— 实测多轮，收益都在 5% 以内');
 
 if (SHOW) {
   for (const r of rows) {

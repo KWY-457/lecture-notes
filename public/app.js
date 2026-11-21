@@ -889,11 +889,17 @@ function scheduleMindMapRedraw() {
 function renderNote() {
   const host = $('note-view');
   const note = state.current?.note;
+  // 「AI 生成，请注意甄别」只在真的有 AI 笔记时出现。
+  // 没笔记的时候面板里是占位文案，那时挂一句免责声明等于对空气说话。
+  // 思维导图也是模型从同一份笔记里抽的，所以两个视图都显示。
+  const aiHint = $('note-ai-hint');
   if (!note?.markdown) {
     host.innerHTML = '<p class="placeholder">还没有笔记。点「① 开始转写」。</p>';
     $('note-source').textContent = '';
+    if (aiHint) aiHint.hidden = true;
     return;
   }
+  if (aiHint) aiHint.hidden = false;
   const mode = note.mode === 'llm' ? `大模型润色${note.model && note.model !== 'llm' ? ' · ' + note.model : ''}` : '旧版离线笔记';
   // 服务端会告诉你这份笔记跟不跟得上当前的逐字稿与算法（见 public/note.js）。
   // 2026-11-13 起离线引擎不再产出笔记，能自动重建的老笔记服务端在读的时候就算过了；

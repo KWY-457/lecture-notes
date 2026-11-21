@@ -583,7 +583,21 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 .pane-head .i { color: var(--muted-2); }
 /* 提示条可能很长（「整理方式已升级，点「AI 版笔记」可重新生成」），
    不约束的话它会把 tab 挤成竖排两行的「笔\n记」。让它自己换行、绝不抢 tab 的位置。 */
-.pane-hint { font-weight: 400; font-size: 11.5px; color: var(--muted-2); flex: 1 1 auto; min-width: 0; text-align: right; line-height: 1.5; }
+.pane-hint { font-weight: 400; font-size: 11.5px; color: var(--muted-2); flex: 0 1 auto; min-width: 0; text-align: right; line-height: 1.5; }
+/* 「AI 生成，请注意甄别」——2026-11-21 老大要求放在面板头右侧的居中位置
+   （「展开逐字稿」按钮右边、来源说明左边那块空地）。
+   为什么要把 .pane-hint 的 flex 让出来：它原来是 flex:1 1 auto，等于一个人
+   吃满右侧所有剩余宽度；这里要让 pane-ai 去占那块地并居中，所以把 pane-hint
+   改成 flex:0 1 auto（宽度只够自己那行字，长了能被压）。
+   nowrap + 省略号：宁可截断成「AI 生成，请注…」，也不能让它换行把面板头撑高一倍。 */
+.pane-ai {
+  flex: 1 1 auto; min-width: 0; text-align: center;
+  font-weight: 400; font-size: 11.5px; line-height: 1.5;
+  color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* flex 布局里 hidden 属性的默认 display:none 会被别处更具体的选择器盖掉，
+   这类「靠 JS 开关的小块」一律显式写一条，省得以后加样式时踩。 */
+.pane-ai[hidden] { display: none; }
 .pane-head .tabs { flex: none; }
 /* 笔记设置按钮：默认只留图标，鼠标进到面板头才把「笔记设置」四个字放出来。
    它不是高频动作，常驻四个字会把来源说明挤窄；但完全藏起来（纯图标）
@@ -1424,6 +1438,12 @@ body.dragging::after {
      （2026-10-26 手机截图实测）。让它整行落到第二行，左对齐。 */
   .pane-head { flex-wrap: wrap; }
   .pane-head .pane-hint { flex: 1 1 100%; text-align: left; }
+  /* 「AI 生成，请注意甄别」在窄屏跟着来源说明一起落到第二行，
+     但它比来源说明重要（读的人得先知道这是模型写的），所以排在前面。
+     两块都吃满整行，AI 那句左对齐、来源说明仍左对齐，读起来是一条竖线。 */
+  .pane-head .pane-ai { flex: 1 1 100%; text-align: left; order: -1; }
+  /* 两块都占满整行时会各占一行，中间留的边距太松，压掉一半 */
+  .pane-head .pane-hint { margin-top: -2px; }
 }
 
 .hint.ok { color: var(--ok); }

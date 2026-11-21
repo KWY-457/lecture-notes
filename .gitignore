@@ -60,3 +60,23 @@ tests/_asr_profile/
 
 # 测试截图（每次跑都会变，别让 diff 全是二进制噪音）
 tests/shots/
+
+# ===== 内部文档（不公开）=====
+# 2026-11-20 开源前整理：以下几类只留给自己看，不跟着开源仓库走。
+# 文件本身还在本地磁盘上，只是 git 不再跟踪。
+#
+# docs/research/   —— 立项期的 10 份调研笔记（竞品、生态、渠道、政策）
+# docs/quality-report.*  —— 质量修复报告，含真实讲次标题、录音 ID、时长、
+#                           一整章质量分析和「拿出去卖」这类商业表述
+# docs/底层数据流诊断.md —— 用 7 条真实录音跑出来的诊断结论
+# docs/transcript-quality-baseline.txt —— 旧质量基线快照（本身已标注过期）
+#
+# 打包那边本来就是白名单（见 packaging/build.ps1 $Dirs），只会带
+# docs/API接入教程.md，所以这次改动不影响安装包内容。
+docs/research/
+docs/quality-report.md
+docs/quality-report.txt
+docs/quality-report.docx
+docs/quality-report.pdf
+docs/底层数据流诊断.md
+docs/transcript-quality-baseline.txt

@@ -201,6 +201,11 @@
             <span class="tx-reopen" id="tx-reopen" hidden>
               <button class="btn ghost tiny" id="btn-tx-expand" title="把逐字稿面板展开回来"><svg class="i sm"><use href="#i-file"/></svg>展开逐字稿</button>
             </span>
+            <!-- 2026-11-21 老大要求：展开逐字稿按钮右边、居中位置要给一句
+                 「AI 生成，请注意甄别」。笔记和思维导图都是大模型现写的，
+                 万一公式或结论编错了，读的人得知道该自己核一遍。
+                 默认 hidden：还没生成笔记时会先闪一下，等 renderNote() 判完再决定。 -->
+            <span class="pane-ai" id="note-ai-hint" hidden>AI 生成，请注意甄别</span>
             <span class="pane-hint" id="note-source"></span>
           </div>
           <article class="markdown" id="note-view">
