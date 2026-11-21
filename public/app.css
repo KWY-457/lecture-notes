@@ -581,6 +581,29 @@ body.remote .empty-card > p { margin-bottom: 16px; }
   letter-spacing: -.005em;
 }
 .pane-head .i { color: var(--muted-2); }
+
+/* ── 面板头按「面板自己的宽度」决定换不换行 ──────────────────────────
+   2026-11-21 实测（`_scratch/measure-panehead.mjs`）：两栏布局在 1080px 以上
+   仍然生效，所以窗口 1150~1085px 这一段笔记栏只有 427~455px 宽。一行里要塞
+   「笔记 / 思维导图」+「笔记设置」+「AI 生成，请注意甄别」+ 来源说明，
+   加起来比可用宽度多 30~50px；而来源说明里的 `deepseek-ai/DeepSeek-V3`
+   是不可断的长 token，压到 50px 以下就撑破 → 面板头横向溢出、高度从 52px
+   涨到 241px。以前没这问题，是因为「笔记设置」平时只露一个图标；
+   加上常驻文字与 AI 提示之后才挤爆。
+   为什么不用窗口宽度的 @media：侧栏可以收起，同一个窗口宽度下面板能差 200px
+   （实测窗口 1080px 时面板 721px、1085px 时只有 418px）。用容器查询按面板
+   自己的宽度判断，才是真正「放不下才换行」。
+   面板 ≥560px 一行放得下，保持单行；窄于 560px 时只让「来源说明」整行落到
+   第二行 —— AI 提示只有 105px，跟 tab、笔记设置挤在第一行还放得下
+   （实测面板 392px 宽时 157+87+105+20 间距 = 369，仍有余量），
+   三行（102px）没必要，两行（75px）刚好。
+   断点取 560 是实测定出来的：面板 599px 时一行需要 157+87+105+194+30 间距
+   = 573，塞进 599-24 内还行（h=52）；再窄就压到来源说明上，所以从 560 往下换。 */
+.pane { container-type: inline-size; }
+@container (max-width: 559px) {
+  .pane-head { flex-wrap: wrap; }
+  .pane-head .pane-hint { flex: 1 1 100%; text-align: left; margin-top: -2px; }
+}
 /* 提示条可能很长（「整理方式已升级，点「AI 版笔记」可重新生成」），
    不约束的话它会把 tab 挤成竖排两行的「笔\n记」。让它自己换行、绝不抢 tab 的位置。 */
 .pane-hint { font-weight: 400; font-size: 11.5px; color: var(--muted-2); flex: 0 1 auto; min-width: 0; text-align: right; line-height: 1.5; }
@@ -589,9 +612,12 @@ body.remote .empty-card > p { margin-bottom: 16px; }
    为什么要把 .pane-hint 的 flex 让出来：它原来是 flex:1 1 auto，等于一个人
    吃满右侧所有剩余宽度；这里要让 pane-ai 去占那块地并居中，所以把 pane-hint
    改成 flex:0 1 auto（宽度只够自己那行字，长了能被压）。
-   nowrap + 省略号：宁可截断成「AI 生成，请注…」，也不能让它换行把面板头撑高一倍。 */
+   nowrap + 省略号：宁可截断成「AI 生成，请注…」，也不能让它换行把面板头撑高一倍。
+   2026-11-21 补：`min-width: max-content` —— 光给 flex 的话，空间一紧它就真被
+   压成「AI 生成，请注意…」，而这句话被截掉尾巴等于没提醒。让它的最小宽度
+   等于自己那行字的宽度，宁可把右边的来源说明挤成两行（那行本来就能换行）。 */
 .pane-ai {
-  flex: 1 1 auto; min-width: 0; text-align: center;
+  flex: 1 1 auto; min-width: max-content; text-align: center;
   font-weight: 400; font-size: 11.5px; line-height: 1.5;
   color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -599,17 +625,13 @@ body.remote .empty-card > p { margin-bottom: 16px; }
    这类「靠 JS 开关的小块」一律显式写一条，省得以后加样式时踩。 */
 .pane-ai[hidden] { display: none; }
 .pane-head .tabs { flex: none; }
-/* 笔记设置按钮：默认只留图标，鼠标进到面板头才把「笔记设置」四个字放出来。
-   它不是高频动作，常驻四个字会把来源说明挤窄；但完全藏起来（纯图标）
-   又没人猜得到齿轮是干什么的，所以折中成 hover 显字 —— 与侧栏「⋯」同一招。 */
-.note-prefs-btn { flex: none; gap: 0; padding: 5px 7px; }
-.note-prefs-btn .lbl { display: none; margin-left: 4px; }
-.pane-head:hover .note-prefs-btn .lbl,
-.note-prefs-btn:focus-visible .lbl { display: inline; }
-/* 触摸屏没有 hover 这回事，雪藏的文案永远不会显形 —— 直接铺开。 */
-@media (hover: none) {
-  .note-prefs-btn .lbl { display: inline; }
-}
+/* 笔记设置按钮：一律带文字，和旁边的「展开逐字稿」同一副样子。
+   2026-11-21 之前是「鼠标进到面板头才把四个字放出来」（与侧栏「⋯」同一招）。
+   加上「AI 生成，请注意甄别」之后这招就出事了：整条横条都是 hover 范围，
+   鼠标一移进去，四个字凭空长出来，把右边的 AI 提示和来源说明一起推开，
+   看着像横条在抖。改成常驻 —— 少省那 60 px，换来不跳。 */
+.note-prefs-btn { flex: none; gap: 6px; padding: 5px 8px; }
+.note-prefs-btn .lbl { display: inline; }
 
 .tx-search {
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 9px;
