@@ -3780,6 +3780,14 @@ function bind() {
   };
   $('btn-help-close').onclick = () => ($('help-modal').hidden = true);
   $('faq-search').oninput = (e) => renderFaq(e.target.value);
+  $('btn-copy-qq').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText('1134814271');
+      toast('Q 群号已复制', 'ok');
+    } catch {
+      toast('复制失败，请手动选择群号', 'err');
+    }
+  };
   $('btn-health').onclick = () => {
     $('settings-modal').hidden = false;
     $('diag-sect').scrollIntoView();

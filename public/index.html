@@ -597,6 +597,11 @@
       <svg class="i"><use href="#i-search"/></svg>
       <input id="faq-search" type="search" placeholder="搜报错原文或问题，比如 401、备份、时间戳" autocomplete="off">
     </div>
+    <!-- 常驻在第一行（在 #faq-body 外面，搜索过滤不会把它冲掉）：下面都解决不了就直接找作者。 -->
+    <div class="faq-contact">
+      <span>如果下面的回答解决不了，关注作者 <a class="linklike" href="https://space.bilibili.com/1113401933" target="_blank" rel="noopener noreferrer">B 站账号</a>，或加 Q 群 <code>1134814271</code> 交流问题</span>
+      <button class="btn ghost tiny" id="btn-copy-qq" title="复制 Q 群号">复制群号</button>
+    </div>
     <div class="settings-body help-body" id="faq-body"></div>
   </div>
 </div>

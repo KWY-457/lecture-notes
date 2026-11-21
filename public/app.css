@@ -1113,6 +1113,22 @@ body.remote .empty-card > p { margin-bottom: 16px; }
 /* 浏览器自带的搜索框叉号在深色底上很脏，交给用户自己退格 */
 .faq-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
+/* FAQ 第一行的联系引导：搜索框下面、正文上面，常驻不随过滤消失。 */
+.faq-contact {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 20px; border-bottom: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.6; color: var(--text-2);
+}
+.faq-contact > span { flex: 1 1 auto; min-width: 0; }
+.faq-contact code {
+  font-family: var(--mono); font-size: .95em;
+  background: var(--panel-2); padding: 1px 5px; border-radius: 5px; color: var(--text);
+}
+.faq-contact .btn { flex: none; }
+@media (max-width: 620px) {
+  .faq-contact { flex-wrap: wrap; gap: 6px; }
+}
+
 .faq-group + .faq-group { margin-top: 6px; }
 .faq-group h4 {
   margin: 20px 0 8px; font-size: 13px; letter-spacing: .04em;
