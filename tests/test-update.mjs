@@ -253,14 +253,22 @@ if (BASE) {
     assert.equal(r.body.ok, true);
     assert.ok('latest' in r.body || 'error' in r.body);
   });
-  await okAsync('/api/update/download 不接受外部地址（只能下清单里那一个）', async () => {
+  await okAsync('/api/update/download 不接受外部地址（checkOnly 只报清单里的地址，不真下）', async () => {
     const r = await j('/api/update/download', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: 'https://example.com/evil.exe' }),
+      // checkOnly：服务端只回「会下哪个文件」，不真拖 25MB 安装包。
+      // 这条测试验的是「不认前端传来的外部地址」，不需要真下载。
+      body: JSON.stringify({ url: 'https://example.com/evil.exe', checkOnly: true }),
     });
-    // 不是 200，且绝不能出现「下载成功」这种回话
-    assert.notEqual(r.status, 200);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.ok, true);
+    assert.equal(r.body.checkOnly, true);
+    // 关键：回包里的 url 必须是服务端现拉清单得到的那个，绝不是前端塞进来的 evil.exe
+    assert.ok(r.body.url, '没回清单里的地址');
+    assert.ok(!String(r.body.url).includes('example.com'), `回包竟然用了外部地址：${r.body.url}`);
+    // 不能出现「下载成功/已安装」这种回话
+    assert.ok(!('reused' in r.body), 'checkOnly 不该回报下载结果');
   });
   await okAsync('/api/update/ignore 需要 version', async () => {
     const before = await j('/api/update/check');

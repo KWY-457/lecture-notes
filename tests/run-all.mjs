@@ -70,6 +70,7 @@ const OFFLINE = [
   ['test-worker-device-fallback.mjs', '显卡不可用时的回退'],
   ['test-vram-autofree.mjs', '转写前自动腾显存'],
   ['test-port-reuse.mjs', '端口撞车先认人：是我自己的就复用，是别人的才换（换了模型缓存就废）'],
+  ['test-update-repo-migrate.mjs', '老配置里的占位仓库地址启动时被迁成真实地址（不迁的话自动更新对老用户永远 404）'],
 ];
 
 // 服务层：要一个活着的后端。

@@ -751,6 +751,7 @@ let config = structuredClone(DEFAULT_CONFIG);
 async function loadConfig() {
   await readConfigFile();
   migrateLegacyProviders();
+  migrateUpdateRepo();
 }
 async function readConfigFile() {
   let raw = null;
@@ -884,6 +885,30 @@ function migrateLegacyProviders() {
     // 这里直接写，失败了也只是下次启动再迁移一遍，不影响使用）
     saveConfig({}).catch(() => {});
   }
+}
+
+/**
+ * 把「检查更新」用的仓库地址从占位值迁到真实值。
+ *
+ * 2026-11-21 真机踩出来的 bug：开发期的默认值一直是占位字符串
+ * `lecture-notes/lecture-notes`（那时仓库还没建）。仓库建好之后
+ * `DEFAULT_CONFIG.update.repo` 改成了真实地址，但 `deepMerge` 只补**缺失**的键、
+ * **不覆盖已有值** —— 于是凡是这个字段写进过 config.json 的机器（也就是所有
+ * 装过旧版本的机器），永远拿占位值去查 `api.github.com/repos/lecture-notes/lecture-notes`
+ * → 404 → 自动更新对**全体老用户**静默失效，界面上什么错都不显示。
+ *
+ * 所以必须有一条显式迁移。只改这一个已知的旧值，用户自己填过别的一律不动
+ * （有人会填镜像仓库，那是合理需求）。
+ */
+const LEGACY_UPDATE_REPOS = new Set(['lecture-notes/lecture-notes']);
+function migrateUpdateRepo() {
+  const cur = String(config.update?.repo || '').trim();
+  if (!cur || !LEGACY_UPDATE_REPOS.has(cur)) return;
+  const next = DEFAULT_CONFIG.update.repo;
+  if (!next || next === cur) return;
+  config.update.repo = next;
+  console.log(`  [配置迁移] update.repo: ${cur} → ${next}`);
+  saveConfig({}).catch(() => {});
 }
 
 async function saveConfig(patch) {
@@ -2993,12 +3018,30 @@ async function handleApi(req, res, u) {
   if (p === '/update/download') {
     if (req.method !== 'POST') return fail(res, 405, '方法不支持');
     if (!isLoopback(req)) return fail(res, 403, '只允许在本机下载更新');
+    const body = await readJsonBody(req).catch(() => ({}));
     const cfg = config.update || DEFAULT_CONFIG.update;
     if (!cfg.enabled) return fail(res, 400, '自动更新已关闭');
     // 现拉一次清单，不信任前端传来的地址 —— 否则这个接口就成了
     // 「让本机下载任意 URL 并执行」的入口。
     const { feed, error } = await fetchFeed(cfg);
     if (error) return fail(res, 502, `下载不了：${error}`);
+    // 只报「会下哪个文件」而不真下。给测试和界面预检用 —— 这个接口真跑起来是
+    // 25MB 的下载，防御性测试不该为了验一句「不认外部地址」去拖整个安装包。
+    // 2026-11-21 才发现这一点：以前仓库还没发过 Release，fetchFeed 直接报错、
+    // 接口秒回 502，所以测试侥幸 0.0 秒通过；发完第一个 Release 之后它开始真的
+    // 下载，跑满 180 秒超时。
+    if (body.checkOnly || body.dryRun) {
+      return json(res, 200, {
+        ok: true,
+        checkOnly: true,
+        name: safeFileName(feed.installer.name),
+        size: Number(feed.installer.size) || 0,
+        sizeText: formatBytes(Number(feed.installer.size) || 0),
+        url: feed.installer.url,
+        version: feed.version,
+        canInstall: isInstalledBuild(),
+      });
+    }
     const got = await downloadInstaller(feed);
     if (!got.ok) return fail(res, 502, `下载失败：${got.error}`);
     return json(res, 200, {
