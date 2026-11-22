@@ -2,7 +2,7 @@
 
 把课堂录音变成**能直接复习的笔记**：手机录的音导进来 → 自动转成文字 → 自动切分主题、挑出重点 → 生成带时间轴的 Markdown 笔记。
 
-一条录音从导入到成稿，全程在你自己的电脑上完成，不需要 Python、不需要 ffmpeg、不需要 Docker，也不需要注册任何账号。
+全程在你自己的电脑上完成，不需要 Python、不需要 ffmpeg、不需要 Docker，也不需要注册任何账号。
 
 ---
 
@@ -24,7 +24,7 @@
 - 语音识别不造轮子 —— 直接复用 Whisper 生态：浏览器端用 [🤗 Transformers.js](https://github.com/huggingface/transformers.js)（ONNX Runtime + WebGPU/WASM），云端可选硅基流动 SenseVoice / OpenAI / 任何 OpenAI 兼容接口（包括自己搭的 faster-whisper、Whishper）。
 - 「课堂录音 → 分主题 → 挑重点 → 排出复习笔记」这一层没有现成好用的，自己写。加上中文课堂那些脏活：繁转简、纠音近错字、给没有标点的本地转写补标点。
 
-整个东西**零外部依赖**：服务端只用 Node 内置模块，前端是纯静态页面，转写在浏览器里跑。不需要 Python、不需要 ffmpeg、不需要 Docker，也不注册任何账号。双击就能用。
+整个东西**零外部依赖**：服务端只用 Node 内置模块，前端是纯静态页面，转写在浏览器里跑，双击就能用。
 
 ## 一之二、许可证
 
